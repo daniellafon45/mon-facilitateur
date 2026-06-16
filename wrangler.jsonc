@@ -1,6 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": ".open-next/worker.js",
+	"pages_build_output_dir": ".open-next",
 	"name": "mon-facilitateur",
 	"compatibility_date": "2026-06-16",
 	"compatibility_flags": [

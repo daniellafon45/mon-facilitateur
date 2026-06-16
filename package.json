@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
     "start": "next start",
     "lint": "eslint",
     "seed:test": "node scripts/seed-test-user.mjs",
@@ -14,6 +15,7 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "pages:build": "opennextjs-cloudflare build",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
@@ -55,7 +57,13 @@
     "three-stdlib": "^2.36.1",
     "zustand": "^5.0.14"
   },
+  "overrides": {
+    "@emnapi/core": "1.11.1",
+    "@emnapi/runtime": "1.11.1"
+  },
   "devDependencies": {
+    "@emnapi/core": "1.11.1",
+    "@emnapi/runtime": "1.11.1",
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4",
     "@types/lodash.throttle": "^4.1.9",
