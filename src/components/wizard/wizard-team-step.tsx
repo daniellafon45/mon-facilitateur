@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Folder, Globe, Info, Layers, Users } from "lucide-react";
 import type { SessionMode, WizardConfirmedGroup, WizardGroupAssign, WizardMember } from "@/types/facilitation";
-import { WIZARD_DRAFT_PROJECT_ID } from "@/lib/project/team-constants";
+import type { ProjectMember } from "@/lib/project/registry-types";
 import { shouldShowOverflowBanner } from "@/lib/project/team-advice";
 import type { TeamAdviceAction } from "@/lib/project/team-advice";
 import { pruneGroupsAfterMemberRemoval } from "@/lib/project/subgroups";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
-import { useProjectMembers, preloadProjectMembers } from "@/lib/hooks/use-project-members";
+import { preloadProjectMembers } from "@/lib/hooks/use-project-members";
 import { useWizardRegistry } from "@/lib/hooks/use-wizard-registry";
 import { useWizardStore } from "@/lib/store/wizard-store";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,12 @@ export function WizardTeamStep({
   projectId,
   mode,
   methodIds = [],
-  members: _membersProp,
+  projectMembers,
+  membersLoading = false,
+  onAddMember,
+  onUpdateMember,
+  onRemoveMember,
+  onReloadMembers,
   onMembersChange,
   confirmedGroups,
   groupAssign = {},
@@ -55,7 +60,12 @@ export function WizardTeamStep({
   projectId?: string | null;
   mode?: SessionMode | null;
   methodIds?: string[];
-  members?: WizardMember[];
+  projectMembers: ProjectMember[];
+  membersLoading?: boolean;
+  onAddMember: (member: Omit<ProjectMember, "id" | "projectId">) => Promise<ProjectMember>;
+  onUpdateMember: (member: ProjectMember) => Promise<void>;
+  onRemoveMember: (memberId: string) => Promise<void>;
+  onReloadMembers?: () => Promise<void>;
   onMembersChange?: (members: WizardMember[]) => void;
   confirmedGroups?: WizardConfirmedGroup[] | null;
   groupAssign?: Record<string, WizardGroupAssign>;
@@ -72,9 +82,8 @@ export function WizardTeamStep({
   const projects = useFacilitationStore((s) => s.projects);
   const setWizardProjectId = useWizardStore((s) => s.setProjectId);
 
-  const pid = projectId ?? WIZARD_DRAFT_PROJECT_ID;
-  const { members, loading, addMember, updateMember, removeMember } =
-    useProjectMembers(pid);
+  const members = projectMembers;
+  const loading = membersLoading;
   const memberNames = members.map((m) => m.displayName);
   const { registry } = useWizardRegistry(projectId, memberNames);
 
@@ -139,7 +148,7 @@ export function WizardTeamStep({
   };
 
   const handleLimitConfirm = async (ids: string[]) => {
-    for (const id of ids) await removeMember(id);
+    for (const id of ids) await onRemoveMember(id);
     if (onGroupsChange) {
       onGroupsChange(pruneGroupsAfterMemberRemoval(confirmedGroups ?? null, ids));
     }
@@ -158,6 +167,7 @@ export function WizardTeamStep({
     setProjectOpen(false);
     if (targetId) {
       await preloadProjectMembers(targetId);
+      await onReloadMembers?.();
     }
   };
 
@@ -258,11 +268,11 @@ export function WizardTeamStep({
           loading={loading}
           addInputRef={addInputRef}
           onAddMember={async (m) => {
-            await addMember(m);
+            await onAddMember(m);
             triggerOverflow();
           }}
-          onUpdateMember={updateMember}
-          onRemoveMember={removeMember}
+          onUpdateMember={onUpdateMember}
+          onRemoveMember={onRemoveMember}
           onOverflow={triggerOverflow}
         />
         <TeamRolesPanel

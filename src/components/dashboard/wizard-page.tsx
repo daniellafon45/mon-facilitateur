@@ -130,7 +130,14 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
   const selGenre = wizard.genre ? GENRE_BY_ID[wizard.genre] : null;
   const previewGenre = GENRE_BY_ID[genrePreviewId ?? wizard.genre ?? ""] ?? null;
   const teamProjectId = wizard.projectId ?? WIZARD_DRAFT_PROJECT_ID;
-  const { members: teamMembers, addMember: addTeamMember } = useProjectMembers(teamProjectId);
+  const {
+    members: teamMembers,
+    loading: teamMembersLoading,
+    addMember: addTeamMember,
+    updateMember: updateTeamMember,
+    removeMember: removeTeamMember,
+    reload: reloadTeamMembers,
+  } = useProjectMembers(teamProjectId);
   const { registry: teamRegistry } = useWizardRegistry(wizard.projectId, teamMembers.map((m) => m.displayName));
   const contacts = useFacilitationStore((s) => s.contacts);
   const savedTeams = useFacilitationStore((s) => s.teams);
@@ -470,7 +477,12 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
           <WizardTeamStep
             mode={wizard.mode}
             projectId={wizard.projectId}
-            members={wizard.members}
+            projectMembers={teamMembers}
+            membersLoading={teamMembersLoading}
+            onAddMember={addTeamMember}
+            onUpdateMember={updateTeamMember}
+            onRemoveMember={removeTeamMember}
+            onReloadMembers={reloadTeamMembers}
             onMembersChange={wizard.setMembers}
             roleAssign={wizard.roleAssign}
             onRoleAssignChange={wizard.setRoleAssign}
