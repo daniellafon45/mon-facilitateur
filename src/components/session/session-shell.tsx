@@ -1,0 +1,403 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Expand,
+  Eye,
+  Link2,
+  Save,
+  SlidersHorizontal,
+} from "lucide-react";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { MethodRenderer } from "@/components/session/methods/registry";
+import { METHOD_BY_ID } from "@/lib/methods/catalog";
+import { buildMethodExportText } from "@/lib/methods/method-workspace-helpers";
+import { METHOD_CONFIGS } from "@/components/session/methods/configs";
+import type { SessionRailId } from "@/lib/session/session-rail-config";
+import { createClient } from "@/lib/supabase/client";
+import { createSessionRun, updateSessionState, endSession } from "@/lib/supabase/queries/sessions";
+import { useFacilitationStore } from "@/lib/store/facilitation-store";
+import type { Meeting, SessionMode } from "@/types/facilitation";
+import type { SessionState } from "@/components/session/methods/column-workspace";
+import { SessionReportPage } from "@/components/session/session-report-page";
+import { MeetingDetail } from "@/components/meetings/meeting-detail";
+import {
+  FloatingSessionNote,
+  SessionConfirmDialog,
+  SessionMethodShell,
+  SessionToast,
+} from "@/components/session/session-method-shell";
+import { SessionRightHub } from "@/components/session/session-right-hub";
+import { SessionRailPanel } from "@/components/session/panels/session-rail-panel";
+import { SessionAiPanel } from "@/components/session/session-ai-panel";
+import { SessionQuickToolModal } from "@/components/session/session-quick-tool-modal";
+import { SessionVotePanel } from "@/components/session/session-vote-panel";
+import {
+  appendNote,
+  appendQuickLog,
+  appendVote,
+  createSessionCapture,
+  type SessionCaptureState,
+} from "@/lib/session/session-capture";
+import { Button } from "@/components/ui/button";
+
+interface SessionShellProps {
+  mode: SessionMode;
+  methodIds: string[];
+  projectId?: string;
+  meetingId?: string;
+  objective?: string;
+  simulating?: boolean;
+}
+
+export function SessionShell({
+  mode,
+  methodIds,
+  projectId,
+  meetingId,
+  objective,
+  simulating = false,
+}: SessionShellProps) {
+  const router = useRouter();
+  const finalizeMeeting = useFacilitationStore((s) => s.finalizeMeeting);
+  const clearActiveSession = useFacilitationStore((s) => s.clearActiveSession);
+  const meetings = useFacilitationStore((s) => s.meetings);
+
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [methodIndex, setMethodIndex] = useState(0);
+  const [states, setStates] = useState<Record<string, SessionState>>({});
+  const [capture, setCapture] = useState<SessionCaptureState>(() => createSessionCapture());
+  const [finishedMeeting, setFinishedMeeting] = useState<Meeting | null>(null);
+  const [viewJournal, setViewJournal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeRail, setActiveRail] = useState<SessionRailId>("seance");
+  const [sessTitle, setSessTitle] = useState(objective || "Ma séance");
+  const [aiOpen, setAiOpen] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [previewFs, setPreviewFs] = useState(false);
+  const [quickTool, setQuickTool] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const currentMethodId = methodIds[methodIndex] ?? methodIds[0];
+  const methodMeta = METHOD_BY_ID[currentMethodId];
+
+  const journalize = useCallback((entry: Parameters<typeof appendQuickLog>[1]) => {
+    setCapture((c) => appendQuickLog(c, entry));
+    setToast("Entrée ajoutée au journal de la séance");
+    window.setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user || sessionId) return;
+      try {
+        const run = await createSessionRun(supabase, data.user.id, {
+          project_id: projectId,
+          meeting_id: meetingId,
+          mode,
+          method_ids: methodIds,
+        });
+        setSessionId(run.id);
+      } catch {
+        /* offline session */
+      }
+    });
+  }, [mode, methodIds, projectId, meetingId, sessionId]);
+
+  const persist = useCallback(
+    async (nextStates: Record<string, SessionState>, idx: number) => {
+      if (!sessionId) return;
+      setSaving(true);
+      try {
+        const supabase = createClient();
+        await updateSessionState(supabase, sessionId, { methods: nextStates }, idx);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sessionId],
+  );
+
+  function updateCurrentState(patch: SessionState) {
+    const next = { ...states, [currentMethodId]: patch };
+    setStates(next);
+    void persist(next, methodIndex);
+  }
+
+  function goMethod(id: string) {
+    const idx = methodIds.indexOf(id);
+    if (idx >= 0) {
+      setMethodIndex(idx);
+      setActiveRail("seance");
+    }
+  }
+
+  function prevTool() {
+    if (methodIndex > 0) setMethodIndex((i) => i - 1);
+  }
+
+  function nextTool() {
+    if (methodIndex < methodIds.length - 1) setMethodIndex((i) => i + 1);
+    else setConfirmEnd(true);
+  }
+
+  async function finishSession() {
+    const report = {
+      objective: sessTitle || objective,
+      mode,
+      methods: methodIds.map((id) => ({
+        id,
+        title: METHOD_BY_ID[id]?.title ?? id,
+        state: states[id] ?? {},
+      })),
+      completedAt: new Date().toISOString(),
+    };
+    if (sessionId) {
+      const supabase = createClient();
+      await endSession(supabase, sessionId, report);
+    }
+
+    const meeting = await finalizeMeeting({
+      meetingId,
+      mode,
+      name: sessTitle || objective || "Session",
+      projectId,
+      methodIds,
+      capture,
+      methodStates: states,
+      simulating,
+    });
+
+    clearActiveSession();
+
+    if (simulating) {
+      router.push("/dashboard/rencontres");
+      return;
+    }
+
+    const resolved = meeting ?? (meetingId ? meetings.find((m) => m.id === meetingId) ?? null : null);
+    if (resolved) setFinishedMeeting(resolved);
+  }
+
+  function exportSession() {
+    const st = states[currentMethodId] ?? {};
+    const config = METHOD_CONFIGS[currentMethodId];
+    const text = config
+      ? buildMethodExportText(currentMethodId, config, st)
+      : `${methodMeta?.title ?? currentMethodId}\n\n`;
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(
+        `<pre style="font-family:ui-monospace,monospace;font-size:13px;white-space:pre-wrap;padding:24px">${text.replace(/</g, "&lt;")}</pre>`,
+      );
+      w.document.close();
+      w.print();
+    }
+    setToast("Export PDF lancé");
+    window.setTimeout(() => setToast(null), 2400);
+  }
+
+  if (viewJournal && finishedMeeting) {
+    return (
+      <MeetingDetail
+        meeting={finishedMeeting}
+        onBack={() => setViewJournal(false)}
+        onToast={(msg) => {
+          setToast(msg);
+          window.setTimeout(() => setToast(null), 2400);
+        }}
+      />
+    );
+  }
+
+  if (finishedMeeting) {
+    return (
+      <DashboardShell>
+        <SessionReportPage
+          meeting={finishedMeeting}
+          onViewJournal={() => setViewJournal(true)}
+          onReplay={() => router.push("/dashboard/session")}
+        />
+      </DashboardShell>
+    );
+  }
+
+  const centerContent =
+    activeRail === "seance" ? (
+      <MethodRenderer
+        methodId={currentMethodId}
+        state={states[currentMethodId] ?? {}}
+        onChange={updateCurrentState}
+        embedded
+      />
+    ) : (
+      <SessionRailPanel
+        railId={activeRail}
+        methodIds={methodIds}
+        activeMethodId={currentMethodId}
+        onSelectMethod={goMethod}
+        projectId={projectId}
+        mode={mode}
+      />
+    );
+
+  const votePanel = (
+    <SessionVotePanel
+      projectId={projectId}
+      onVoteClosed={({ question, options, total }) => {
+        setCapture((c) =>
+          appendVote(c, {
+            kind: "Vote pondéré",
+            q: question,
+            total,
+            options,
+          }),
+        );
+        setToast("Vote enregistré dans le journal");
+        window.setTimeout(() => setToast(null), 2200);
+      }}
+    />
+  );
+
+  return (
+    <DashboardShell>
+      <div className="space-y-3" data-testid="session-shell">
+        {simulating && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
+            Mode simulation — cette séance ne créera pas de rencontre terminée dans l&apos;historique.
+          </div>
+        )}
+        {saving && (
+          <p className="flex items-center gap-1 px-1 text-xs text-muted-foreground">
+            <Save className="h-3 w-3" /> Sauvegarde…
+          </p>
+        )}
+
+        <SessionMethodShell
+          title={sessTitle}
+          onTitleChange={setSessTitle}
+          badge={mode}
+          onAssistant={() => setAiOpen(true)}
+          focusMode={focusMode}
+          menuActions={[
+            {
+              label: focusMode ? "Quitter la présentation" : "Mode présentation",
+              icon: <Eye className="h-4 w-4" />,
+              onClick: () => setFocusMode((f) => !f),
+            },
+            {
+              label: "Aperçu plein écran",
+              icon: <Expand className="h-4 w-4" />,
+              onClick: () => setPreviewFs(true),
+            },
+            {
+              label: "Exporter (PDF)",
+              icon: <Download className="h-4 w-4" />,
+              onClick: exportSession,
+            },
+            {
+              label: "Changer le design",
+              icon: <SlidersHorizontal className="h-4 w-4" />,
+              onClick: () => setToast("Utilisez le menu Design dans la bannière de la méthode"),
+            },
+            {
+              label: "Partager la séance",
+              icon: <Link2 className="h-4 w-4" />,
+              onClick: () => {
+                void navigator.clipboard?.writeText(window.location.href);
+                setToast("Lien de séance copié");
+                window.setTimeout(() => setToast(null), 2400);
+              },
+            },
+          ]}
+          onFinish={() => setConfirmEnd(true)}
+          activeRail={activeRail}
+          onRailChange={setActiveRail}
+          hideParticipantsRail={mode === "solo"}
+          right={
+            <SessionRightHub
+              methodIds={methodIds}
+              activeMethodId={currentMethodId}
+              onSelectMethod={goMethod}
+              onOpenQuickTool={setQuickTool}
+              onPreviewFullscreen={() => setPreviewFs((f) => !f)}
+              previewFullscreen={previewFs}
+            />
+          }
+          footer={
+            activeRail === "seance" ? (
+              <div className="flex flex-wrap justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-1 rounded-xl"
+                  disabled={methodIndex === 0}
+                  onClick={prevTool}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Étape précédente
+                </Button>
+                <Button type="button" className="gap-1 rounded-xl" onClick={nextTool}>
+                  {methodIndex < methodIds.length - 1 ? "Outil suivant" : "Conclure & résumé"}
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : undefined
+          }
+          overlays={
+            <>
+              <SessionAiPanel
+                open={aiOpen}
+                methodTitle={methodMeta?.title ?? currentMethodId}
+                onClose={() => setAiOpen(false)}
+              />
+              <SessionQuickToolModal
+                toolId={quickTool}
+                onClose={() => setQuickTool(null)}
+                onJournalize={journalize}
+              />
+              <SessionConfirmDialog
+                open={confirmEnd}
+                title="Terminer la séance ?"
+                body="La séance sera close et vous passerez au compte rendu. Vous pourrez toujours la consulter ensuite."
+                confirmLabel="Terminer la séance"
+                onConfirm={() => void finishSession()}
+                onClose={() => setConfirmEnd(false)}
+              />
+              <FloatingSessionNote
+                hidden={focusMode}
+                onSave={(text) => {
+                  setCapture((c) => appendNote(c, text, "public"));
+                  setToast("Note enregistrée");
+                  window.setTimeout(() => setToast(null), 2200);
+                }}
+              />
+              <SessionToast message={toast} />
+              {previewFs && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewFs(false)}
+                  className="fixed right-4 top-4 z-[3000] flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-lg"
+                >
+                  Quitter l&apos;aperçu · Échap
+                </button>
+              )}
+            </>
+          }
+        >
+          {activeRail === "seance" && <div className="mb-4 lg:hidden">{votePanel}</div>}
+          <div className={previewFs ? "fixed inset-0 z-[800] overflow-y-auto bg-background p-6" : undefined}>
+            {centerContent}
+          </div>
+          {activeRail === "seance" && <div className="mt-6 hidden lg:block">{votePanel}</div>}
+        </SessionMethodShell>
+      </div>
+    </DashboardShell>
+  );
+}

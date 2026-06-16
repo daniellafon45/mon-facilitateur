@@ -1,0 +1,32 @@
+# Mon facilitateur
+
+> Copilote de facilitation pour accélérer l'innovation collective et rendre les réunions plus courtes et productives.
+
+## Product
+
+Mon facilitateur aide les équipes à cadrer, structurer et animer des sessions de travail en solo, en équipe ou en grand atelier. L'assistant IA pose des questions ciblées avant de proposer format, méthode et ordre du jour.
+
+## Key pages
+
+- Homepage: /
+- Sign up: /signup
+- Login: /login
+- Dashboard: /dashboard
+
+## Features
+
+- Assistant IA (connexion requise)
+- Wizard de création de session (solo / équipe / atelier)
+- Bibliothèque de méthodes (SCAMPER, Ishikawa, brainwriting, etc.)
+- Projets, rencontres, Dream Team, messagerie
+- Centre de pilotage
+- Exports PDF et Excel
+
+## Pricing
+
+- Free tier: session creation and basic methods
+- Pro: advanced methods, integrations, pilotage (contact for enterprise)
+
+## Contact
+
+- Website: https://monfacilitateur.app
