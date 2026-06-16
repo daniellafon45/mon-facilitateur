@@ -1,6 +1,5 @@
 "use client";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -14,8 +13,7 @@ export function PlaceholderDashboardPage({
   description: string;
 }) {
   return (
-    <DashboardShell>
-      <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto">
         <Card>
           <CardHeader>
             <CardTitle>{title}</CardTitle>
@@ -28,7 +26,6 @@ export function PlaceholderDashboardPage({
           </CardContent>
         </Card>
       </div>
-    </DashboardShell>
   );
 }
 

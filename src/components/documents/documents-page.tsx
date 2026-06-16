@@ -76,12 +76,12 @@ import {
 import type { DocFilters, DocItem, DocModalState, DocSort, DocView } from "@/lib/documents/types";
 
 const KPI_CONFIG = [
-  { key: "tous" as const, icon: FileText, color: "text-blue-600 bg-blue-500/10", label: "Tous les documents" },
-  { key: "projets" as const, icon: Folder, color: "text-blue-600 bg-blue-500/10", label: "Par projets" },
-  { key: "reunions" as const, icon: Calendar, color: "text-violet-600 bg-violet-500/10", label: "Par réunions" },
-  { key: "partages" as const, icon: Users, color: "text-emerald-600 bg-emerald-500/10", label: "Partagés avec moi" },
-  { key: "recents" as const, icon: Clock, color: "text-sky-600 bg-sky-500/10", label: "Récents" },
-  { key: "favoris" as const, icon: Star, color: "text-amber-600 bg-amber-500/10", label: "Favoris" },
+  { key: "tous" as const, icon: FileText, color: "text-blue-600", label: "Tous les documents" },
+  { key: "projets" as const, icon: Folder, color: "text-blue-600", label: "Par projets" },
+  { key: "reunions" as const, icon: Calendar, color: "text-violet-600", label: "Par réunions" },
+  { key: "partages" as const, icon: Users, color: "text-emerald-600", label: "Partagés avec moi" },
+  { key: "recents" as const, icon: Clock, color: "text-sky-600", label: "Récents" },
+  { key: "favoris" as const, icon: Star, color: "text-amber-600", label: "Favoris" },
 ];
 
 const EMPTY_FILTERS: DocFilters = {
@@ -215,7 +215,7 @@ export function DocumentsPage() {
   const isTrash = view === "corbeille";
 
   return (
-    <div className="flex min-h-0">
+    <div className="flex min-h-0 xl:gap-6">
       <div className="min-w-0 flex-1">
         {/* En-tête */}
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -319,7 +319,7 @@ export function DocumentsPage() {
                   active ? "border-foreground bg-foreground/5 shadow-sm" : "border-border bg-card hover:bg-muted/40",
                 )}
               >
-                <span className={cn("mb-2 inline-flex rounded-lg p-1.5", s.color)}>
+                <span className={cn("mb-2 inline-flex", s.color)}>
                   <Icon className="h-4 w-4" />
                 </span>
                 <p className="text-xl font-extrabold tracking-tight">{s.val}</p>

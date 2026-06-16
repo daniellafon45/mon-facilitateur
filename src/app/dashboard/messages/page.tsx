@@ -1,23 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { AssistantModal } from "@/components/dashboard/assistant-modal";
+import { useEffect } from "react";
 import { MessagesPage } from "@/components/messages/messages-page";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
 
 export default function Page() {
-  const [aiOpen, setAiOpen] = useState(false);
   const store = useFacilitationStore();
 
   useEffect(() => {
     if (!store.hydrated) void store.hydrateFromSupabase();
   }, [store.hydrated, store.hydrateFromSupabase]);
 
-  return (
-    <DashboardShell onOpenAssistant={() => setAiOpen(true)}>
-      <MessagesPage />
-      <AssistantModal open={aiOpen} onClose={() => setAiOpen(false)} />
-    </DashboardShell>
-  );
+  return <MessagesPage />;
 }

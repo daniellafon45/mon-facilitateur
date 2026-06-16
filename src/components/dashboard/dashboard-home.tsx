@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Rocket, Calendar, CheckCircle, Users, Folder, ArrowRight } from "lucide-react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { AssistantModal } from "@/components/dashboard/assistant-modal";
 import { AssistantIaCard } from "@/components/dashboard/assistant-ia-card";
+import {
+  useAssistantFocusHandler,
+  useDashboardUi,
+} from "@/components/dashboard/dashboard-ui-context";
 import { WizardDraftHomeCard } from "@/components/wizard/wizard-draft-block";
 import { AnimatedTestimonials } from "@/components/ui/testimonial";
 import { FAMOUS_AUTHOR_QUOTES } from "@/lib/data/author-quotes";
@@ -18,15 +20,16 @@ import { createClient } from "@/lib/supabase/client";
 
 export function DashboardHome() {
   const router = useRouter();
+  const { openAssistant } = useDashboardUi();
   const meetings = useFacilitationStore((s) => s.meetings);
   const projects = useFacilitationStore((s) => s.projects);
   const tasks = useFacilitationStore((s) => s.tasks);
   const contactsCount = useFacilitationStore((s) => s.contacts.length);
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiSeed, setAiSeed] = useState("");
   const [prompt, setPrompt] = useState("");
   const [firstName, setFirstName] = useState("");
   const [mounted, setMounted] = useState(false);
+
+  useAssistantFocusHandler(() => prompt.trim());
 
   useEffect(() => {
     setMounted(true);
@@ -45,15 +48,9 @@ export function DashboardHome() {
     if (heroPrompt) {
       sessionStorage.removeItem("mf-hero-prompt");
       setPrompt(heroPrompt);
-      setAiSeed(heroPrompt);
-      setAiOpen(true);
+      openAssistant(heroPrompt);
     }
-  }, []);
-
-  const openAssistant = (seed = "") => {
-    setAiSeed(seed);
-    setAiOpen(true);
-  };
+  }, [openAssistant]);
 
   const launchAssistant = () => {
     openAssistant(prompt.trim());
@@ -86,8 +83,7 @@ export function DashboardHome() {
   ];
 
   return (
-    <DashboardShell onOpenAssistant={() => openAssistant(prompt.trim())}>
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tighter sm:text-3xl">
             Bonjour {firstName || "!"}
@@ -166,12 +162,5 @@ export function DashboardHome() {
           </div>
         </section>
       </div>
-
-      <AssistantModal
-        open={aiOpen}
-        initialText={aiSeed}
-        onClose={() => setAiOpen(false)}
-      />
-    </DashboardShell>
   );
 }

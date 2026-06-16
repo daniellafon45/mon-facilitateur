@@ -95,12 +95,16 @@ export function getMethodCatalogIds(): string[] {
   return ALL_METHODS.map((m) => m.id);
 }
 
-export function recommendMethod(genreCat: string, objective: string) {
+export function recommendMethod(
+  genreCat: string,
+  objective: string,
+  opts?: { ptype?: string | null; genreId?: string | null },
+) {
   const byCat: Record<string, { main: string; alts: string[] }> = {
     ideas: { main: "brainstorm", alts: ["bono", "concept"] },
     reflect: { main: "ishikawa", alts: ["fivewhys", "concept"] },
     decide: { main: "bono", alts: ["logic", "fivewhys"] },
-    start: { main: "bmc", alts: ["concept", "brainstorm"] },
+    start: { main: "clarification-du-mandat", alts: ["raci", "plan-d-action"] },
     align: { main: "concept", alts: ["brainstorm", "bono"] },
     stake: { main: "concept", alts: ["bmc", "brainstorm"] },
     study: { main: "concept", alts: ["logic", "functional"] },
@@ -108,12 +112,41 @@ export function recommendMethod(genreCat: string, objective: string) {
   const cat = genreCat || "ideas";
   let reco = byCat[cat] ?? byCat.ideas;
   const o = (objective || "").toLowerCase();
-  if (/racine|root/.test(o)) reco = { main: "fivewhys", alts: ["ishikawa", "concept"] };
-  else if (/cause|problème|probleme|panne|blocage/.test(o)) reco = { main: "ishikawa", alts: ["fivewhys", "concept"] };
-  else if (/mod[èe]le|business|affaires/.test(o)) reco = { main: "bmc", alts: ["concept", "functional"] };
-  else if (/d[ée]cid|choisir|prioris/.test(o)) reco = { main: "bono", alts: ["logic", "fivewhys"] };
-  else if (/id[ée]e|brainstorm|cr[ée]ati/.test(o)) reco = { main: "brainstorm", alts: ["bono", "concept"] };
-  else if (/structur|plan|hiérarch|organis/.test(o)) reco = { main: "logic", alts: ["concept", "functional"] };
+  const ptype = (opts?.ptype || "").toLowerCase();
+  const genreId = (opts?.genreId || "").toLowerCase();
+  const isAcademic =
+    ptype === "academique" || /\b(école|ecole|scolaire|étudiant|etudiant|cours|universit)/.test(o);
+  const isBusiness =
+    /\b(mod[èe]le|business|affaires|revenu|march[ée]|startup|client|proposition de valeur)\b/.test(o);
+  const isKickoff = /\b(e_cadrage|e_kickoff)\b/.test(genreId);
+  const hasRoles = /\b(raci|r[oô]le|responsabilit|qui fait quoi)\b/.test(o);
+  const hasRootCause = /racine|root/.test(o);
+  const hasProblem = /cause|problème|probleme|panne|blocage/.test(o);
+  const hasDecision = /d[ée]cid|choisir|prioris/.test(o);
+  const hasIdeation = /id[ée]e|brainstorm|cr[ée]ati/.test(o);
+  const hasStructure = /structur|plan|hiérarch|organis/.test(o);
+
+  if (isKickoff || (cat === "start" && !isBusiness)) {
+    reco = { main: "clarification-du-mandat", alts: ["raci", "plan-d-action"] };
+  }
+  if (isAcademic && !isBusiness) {
+    reco = { main: "clarification-du-mandat", alts: ["raci", "logic"] };
+  }
+  if (isBusiness) {
+    reco = { main: "bmc", alts: ["lean-canvas", "value-proposition-canvas"] };
+  } else if (hasRoles) {
+    reco = { main: "raci", alts: ["clarification-du-mandat", "plan-d-action"] };
+  } else if (hasRootCause) {
+    reco = { main: "fivewhys", alts: ["ishikawa", "concept"] };
+  } else if (hasProblem) {
+    reco = { main: "ishikawa", alts: ["fivewhys", "concept"] };
+  } else if (hasDecision) {
+    reco = { main: "bono", alts: ["logic", "fivewhys"] };
+  } else if (hasIdeation) {
+    reco = { main: "brainstorm", alts: ["bono", "concept"] };
+  } else if (hasStructure) {
+    reco = { main: "logic", alts: ["concept", "functional"] };
+  }
   const alts = reco.alts.filter((a) => a !== reco.main).slice(0, 2);
   return { main: reco.main, alts, set: [reco.main, ...alts] };
 }

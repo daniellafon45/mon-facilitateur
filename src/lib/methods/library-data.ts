@@ -139,3 +139,12 @@ export const METHOD_PAL_BG: Record<string, string> = {
 };
 
 export const SPECIAL_TOOL_IDS = new Set(["raci", "roles", "charter", "commplan", "tableau-blanc"]);
+
+/** Retrouve un outil de la bibliothèque par id (familles + séance). */
+export function findLibMethodItem(id: string): LibMethodItem | undefined {
+  for (const fam of LIB_FAMILIES) {
+    const hit = fam.items.find((i) => i.id === id);
+    if (hit) return hit;
+  }
+  return LIB_SEANCE.find((i) => i.id === id);
+}

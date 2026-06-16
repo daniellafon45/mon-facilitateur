@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { AssistantModal } from "@/components/dashboard/assistant-modal";
 import {
   DreamTeamKanban,
   DreamTeamStats,
@@ -26,7 +24,6 @@ export default function DreamTeamPage() {
   const ensureDM = useMessagesStore((s) => s.ensureDM);
   const ensureTeam = useMessagesStore((s) => s.ensureTeam);
   const requestOpen = useMessagesStore((s) => s.requestOpen);
-  const [aiOpen, setAiOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [contactModal, setContactModal] = useState<DreamTeamContact | null | "new">(null);
   const [teamModal, setTeamModal] = useState<DreamTeamTeam | null | "new">(null);
@@ -251,7 +248,7 @@ export default function DreamTeamPage() {
   }
 
   return (
-    <DashboardShell onOpenAssistant={() => setAiOpen(true)}>
+    <>
       <div className="mx-auto max-w-6xl space-y-8 pb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -319,8 +316,6 @@ export default function DreamTeamPage() {
           {toast}
         </div>
       ) : null}
-
-      <AssistantModal open={aiOpen} onClose={() => setAiOpen(false)} />
-    </DashboardShell>
+    </>
   );
 }

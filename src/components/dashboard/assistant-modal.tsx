@@ -21,6 +21,7 @@ import { startWizardSession } from "@/lib/wizard/start-wizard-session";
 import type { ChatRecommendation, SessionMode } from "@/types/facilitation";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
 import { useWizardStore } from "@/lib/store/wizard-store";
+import { MotionOverlay } from "@/components/ui/motion-overlay";
 import { cn } from "@/lib/utils";
 
 const ASSISTANT_CHANNEL = {
@@ -284,8 +285,6 @@ export function AssistantModal({ open, initialText, onClose }: AssistantModalPro
     finishQuickPick(mode, genreId);
   }
 
-  if (!open) return null;
-
   const genreOptions = pickedMode ? genresForMode(pickedMode) : [];
   const quickPicks = recommendation?.followUpQuestions?.length
     ? recommendation.followUpQuestions
@@ -294,12 +293,15 @@ export function AssistantModal({ open, initialText, onClose }: AssistantModalPro
       : [];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md"
-      onClick={onClose}
-      data-testid="assistant-modal"
+    <MotionOverlay
+      open={open}
+      onClose={onClose}
+      variant="center"
+      zIndex={50}
+      className="bg-slate-900/40 backdrop-blur-md"
+      panelClassName="h-[min(680px,88vh)] max-w-[500px]"
     >
-      <div className="h-[min(680px,88vh)] w-full max-w-[500px]" onClick={(e) => e.stopPropagation()}>
+      <div data-testid="assistant-modal" className="h-full">
         <ChatPanel
           channel={ASSISTANT_CHANNEL}
           className="h-full max-w-none"
@@ -440,6 +442,6 @@ export function AssistantModal({ open, initialText, onClose }: AssistantModalPro
           </div>
         </ChatPanel>
       </div>
-    </div>
+    </MotionOverlay>
   );
 }

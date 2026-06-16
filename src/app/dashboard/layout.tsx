@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardHydrator } from "@/components/dashboard/dashboard-hydrator";
+import { DashboardClientLayout } from "@/components/dashboard/dashboard-client-layout";
 
 export default async function DashboardLayout({
   children,
@@ -23,7 +24,7 @@ export default async function DashboardLayout({
   return (
     <>
       <DashboardHydrator />
-      {children}
+      <DashboardClientLayout>{children}</DashboardClientLayout>
     </>
   );
 }

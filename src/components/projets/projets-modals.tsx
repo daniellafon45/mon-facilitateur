@@ -6,6 +6,7 @@ import type { DisplayProject } from "@/types/facilitation";
 import { PROJECT_ICONS } from "@/lib/projets/constants";
 import { MfDrawer } from "@/components/projets/projets-shared";
 import { ProjectIcon } from "@/components/projets/projets-icon";
+import { MotionOverlay } from "@/components/ui/motion-overlay";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -142,18 +143,23 @@ export function RenameModal({
   }, [onClose]);
   const valid = name.trim().length > 0;
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/45 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-[420px] rounded-2xl bg-background p-6 shadow-xl animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3.5 text-[17px] font-extrabold">Renommer le projet</div>
-        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && valid) onConfirm(name.trim()); }} className="mb-4 rounded-lg" />
-        <div className="flex gap-2.5">
-          <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>Annuler</Button>
-          <Button className="flex-1 rounded-xl gap-1.5" disabled={!valid} onClick={() => onConfirm(name.trim())}>
-            <Check className="h-4 w-4" /> Renommer
-          </Button>
-        </div>
+    <MotionOverlay
+      open
+      onClose={onClose}
+      variant="center"
+      zIndex={1200}
+      className="bg-slate-900/45 backdrop-blur-sm"
+      panelClassName="max-w-[420px] rounded-2xl bg-background p-6 shadow-xl"
+    >
+      <div className="mb-3.5 text-[17px] font-extrabold">Renommer le projet</div>
+      <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && valid) onConfirm(name.trim()); }} className="mb-4 rounded-lg" />
+      <div className="flex gap-2.5">
+        <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>Annuler</Button>
+        <Button className="flex-1 rounded-xl gap-1.5" disabled={!valid} onClick={() => onConfirm(name.trim())}>
+          <Check className="h-4 w-4" /> Renommer
+        </Button>
       </div>
-    </div>
+    </MotionOverlay>
   );
 }
 
@@ -173,26 +179,31 @@ export function ConfirmModal({
   }, [onCancel]);
   const del = confirm.action === "delete";
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-900/45 p-6 backdrop-blur-sm" onClick={onCancel}>
-      <div className="w-full max-w-[400px] overflow-hidden rounded-2xl bg-background shadow-xl animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 pt-6 pb-4 text-center">
-          <div className={cn("mx-auto mb-3.5 flex h-[52px] w-[52px] items-center justify-center rounded-full", del ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600")}>
-            {del ? <X className="h-6 w-6" /> : <Calendar className="h-6 w-6" />}
-          </div>
-          <div className="mb-1.5 text-lg font-extrabold">{del ? "Supprimer ce projet ?" : "Archiver ce projet ?"}</div>
-          <div className="text-sm text-muted-foreground leading-relaxed">
-            « {confirm.project.name} »
-            {del ? " sera définitivement supprimé. Cette action est irréversible." : " sera déplacé dans les archives. Vous pourrez le restaurer."}
-          </div>
+    <MotionOverlay
+      open
+      onClose={onCancel}
+      variant="center"
+      zIndex={1200}
+      className="bg-slate-900/45 backdrop-blur-sm"
+      panelClassName="max-w-[400px] overflow-hidden rounded-2xl bg-background shadow-xl"
+    >
+      <div className="px-6 pt-6 pb-4 text-center">
+        <div className={cn("mx-auto mb-3.5 flex h-[52px] w-[52px] items-center justify-center rounded-full", del ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600")}>
+          {del ? <X className="h-6 w-6" /> : <Calendar className="h-6 w-6" />}
         </div>
-        <div className="flex gap-2.5 px-6 pb-6">
-          <Button variant="outline" className="flex-1 rounded-xl" onClick={onCancel}>Annuler</Button>
-          <Button className={cn("flex-1 rounded-xl text-white", del ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700")} onClick={onConfirm}>
-            {del ? "Supprimer" : "Archiver"}
-          </Button>
+        <div className="mb-1.5 text-lg font-extrabold">{del ? "Supprimer ce projet ?" : "Archiver ce projet ?"}</div>
+        <div className="text-sm text-muted-foreground leading-relaxed">
+          « {confirm.project.name} »
+          {del ? " sera définitivement supprimé. Cette action est irréversible." : " sera déplacé dans les archives. Vous pourrez le restaurer."}
         </div>
       </div>
-    </div>
+      <div className="flex gap-2.5 px-6 pb-6">
+        <Button variant="outline" className="flex-1 rounded-xl" onClick={onCancel}>Annuler</Button>
+        <Button className={cn("flex-1 rounded-xl text-white", del ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700")} onClick={onConfirm}>
+          {del ? "Supprimer" : "Archiver"}
+        </Button>
+      </div>
+    </MotionOverlay>
   );
 }
 
@@ -286,36 +297,3 @@ export function NewProjectDrawer({
     </MfDrawer>
   );
 }
-
-function RowMenu({
-  actions,
-  onAction,
-  onClose,
-}: {
-  actions: readonly { id: string; icon: string; label: string; danger?: boolean }[];
-  onAction: (id: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      <div className="fixed inset-0 z-50" onClick={onClose} />
-      <div className="absolute top-[calc(100%+4px)] right-0 z-[51] min-w-[178px] rounded-[11px] border bg-background p-1 shadow-lg">
-        {actions.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => onAction(a.id)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold cursor-pointer hover:bg-muted",
-              a.danger && "text-red-600 hover:bg-red-50",
-            )}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
-
-export { RowMenu };

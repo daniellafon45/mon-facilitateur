@@ -5,7 +5,7 @@
  * Usage :
  *   node scripts/generate-wizard-images.mjs           # tout générer
  *   node scripts/generate-wizard-images.mjs --skip-existing
- *   node scripts/generate-wizard-images.mjs --group=genres
+ *   node scripts/generate-wizard-images.mjs --group=agenda
  */
 
 import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
@@ -24,6 +24,7 @@ const GROUP_DIRS = {
   genres: join(PUBLIC_WIZARD, "genres"),
   solo: join(PUBLIC_WIZARD, "solo"),
   launch: join(PUBLIC_WIZARD, "launch"),
+  agenda: join(PUBLIC_WIZARD, "agenda"),
 };
 
 const STYLE = "Cinematic realistic editorial photo, shallow depth of field, no text, no logos";
@@ -94,6 +95,13 @@ const ITEMS = [
   { id: "launch_now", group: "launch", title: "Lancer maintenant", prompt: `${STYLE}, person pressing start button on session dashboard, blue energetic launch mood` },
   { id: "launch_schedule", group: "launch", title: "Programmer", prompt: `${STYLE}, calendar scheduling with future meeting planned, green organized atmosphere` },
   { id: "launch_simulate", group: "launch", title: "Simuler", prompt: `${STYLE}, rehearsal mode with person previewing meeting alone, violet thoughtful mood` },
+  // Ordre du jour — types de blocs
+  { id: "agenda_intro", group: "agenda", title: "Ouverture", prompt: `${STYLE}, facilitator welcoming small team at start of workshop, warm welcoming atmosphere, blue tones` },
+  { id: "agenda_focus", group: "agenda", title: "Travail guidé", prompt: `${STYLE}, focused team working on facilitation method at table with sticky notes, sky blue productive mood` },
+  { id: "agenda_pause", group: "agenda", title: "Pause", prompt: `${STYLE}, coffee break during workshop people relaxing chatting, warm amber cozy atmosphere` },
+  { id: "agenda_synthese", group: "agenda", title: "Synthèse", prompt: `${STYLE}, team wrapping up session with action plan on whiteboard, emerald green decisive mood` },
+  { id: "agenda_breakout", group: "agenda", title: "Sous-groupe", prompt: `${STYLE}, small breakout group discussion in corner of workshop room, violet collaborative energy` },
+  { id: "agenda_pleniere", group: "agenda", title: "Plénière", prompt: `${STYLE}, plenary session large group sharing results in auditorium style room, indigo professional atmosphere` },
 ];
 
 const args = process.argv.slice(2);
@@ -153,6 +161,19 @@ async function writeMapping() {
   );
 }
 
+async function writeAvailable() {
+  const available = Object.fromEntries(
+    ITEMS.filter((item) => existsSync(join(GROUP_DIRS[item.group], `${item.id}.webp`))).map((item) => [
+      item.id,
+      true,
+    ]),
+  );
+  await writeFile(
+    join(ROOT, "src", "lib", "wizard", "wizard-images.available.json"),
+    `${JSON.stringify(available, null, 2)}\n`,
+  );
+}
+
 async function main() {
   for (const dir of Object.values(GROUP_DIRS)) {
     await mkdir(dir, { recursive: true });
@@ -165,7 +186,8 @@ async function main() {
   }
 
   await writeMapping();
-  console.log(`\nTerminé — ${items.length} item(s), mapping écrit dans wizard-images.generated.json`);
+  await writeAvailable();
+  console.log(`\nTerminé — ${items.length} item(s), mapping + available écrits`);
 }
 
 main().catch((err) => {

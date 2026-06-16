@@ -59,7 +59,7 @@ export function WizardOptionCard({
       onBlur={onBlur}
       data-testid={testId}
       className={cn(
-        "group relative text-left transition-all duration-200",
+        "group relative text-left transition-all duration-200 active:scale-[0.98]",
         isHorizontal
           ? "flex w-full items-start gap-3 rounded-xl border bg-background p-3"
           : "flex w-full flex-col rounded-xl border bg-background p-3.5",

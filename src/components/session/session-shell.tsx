@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -12,12 +12,12 @@ import {
   Save,
   SlidersHorizontal,
 } from "lucide-react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { MethodRenderer } from "@/components/session/methods/registry";
 import { METHOD_BY_ID } from "@/lib/methods/catalog";
 import { buildMethodExportText } from "@/lib/methods/method-workspace-helpers";
 import { METHOD_CONFIGS } from "@/components/session/methods/configs";
 import type { SessionRailId } from "@/lib/session/session-rail-config";
+import { QUICK_TOOLS } from "@/lib/session/session-rail-config";
 import { createClient } from "@/lib/supabase/client";
 import { createSessionRun, updateSessionState, endSession } from "@/lib/supabase/queries/sessions";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
@@ -40,9 +40,15 @@ import {
   appendNote,
   appendQuickLog,
   appendVote,
+  appendDiscussion,
+  setPrivateNotes,
   createSessionCapture,
   type SessionCaptureState,
 } from "@/lib/session/session-capture";
+import { findLibMethodItem } from "@/lib/methods/library-data";
+import { buildSessionAssistContext } from "@/lib/session/build-session-assist-context";
+import { MethodLiveOverlay } from "@/components/modeles/method-live-overlay";
+import type { LibMethodItem } from "@/lib/methods/library-data";
 import { Button } from "@/components/ui/button";
 
 interface SessionShellProps {
@@ -52,6 +58,7 @@ interface SessionShellProps {
   meetingId?: string;
   objective?: string;
   simulating?: boolean;
+  durationMin?: number;
 }
 
 export function SessionShell({
@@ -61,6 +68,7 @@ export function SessionShell({
   meetingId,
   objective,
   simulating = false,
+  durationMin = 60,
 }: SessionShellProps) {
   const router = useRouter();
   const finalizeMeeting = useFacilitationStore((s) => s.finalizeMeeting);
@@ -81,16 +89,82 @@ export function SessionShell({
   const [focusMode, setFocusMode] = useState(false);
   const [previewFs, setPreviewFs] = useState(false);
   const [quickTool, setQuickTool] = useState<string | null>(null);
+  const [projectTool, setProjectTool] = useState<LibMethodItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setElapsedTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
 
   const currentMethodId = methodIds[methodIndex] ?? methodIds[0];
   const methodMeta = METHOD_BY_ID[currentMethodId];
+
+  const assistContext = useMemo(
+    () =>
+      buildSessionAssistContext({
+        objective: sessTitle || objective || "",
+        mode,
+        durationMin,
+        methodIds,
+        activeMethodIndex: methodIndex,
+        activeMethodId: currentMethodId,
+        states,
+        capture,
+      }),
+    [sessTitle, objective, mode, durationMin, methodIds, methodIndex, currentMethodId, states, capture, elapsedTick],
+  );
 
   const journalize = useCallback((entry: Parameters<typeof appendQuickLog>[1]) => {
     setCapture((c) => appendQuickLog(c, entry));
     setToast("Entrée ajoutée au journal de la séance");
     window.setTimeout(() => setToast(null), 2200);
   }, []);
+
+  const handleVoteClosed = useCallback(
+    (data: { question: string; options: { label: string; pct: number }[]; total: number }) => {
+      setCapture((c) =>
+        appendVote(c, {
+          kind: "Vote pondéré",
+          q: data.question,
+          total: data.total,
+          options: data.options,
+        }),
+      );
+      setToast("Vote enregistré dans le journal");
+      window.setTimeout(() => setToast(null), 2200);
+    },
+    [],
+  );
+
+  const openProjectTool = useCallback((methodId: string) => {
+    const item = findLibMethodItem(methodId);
+    if (item) {
+      setProjectTool(item);
+      setToast(`Ouverture : ${item.title}`);
+      window.setTimeout(() => setToast(null), 2200);
+    } else {
+      setToast("Outil indisponible");
+      window.setTimeout(() => setToast(null), 2400);
+    }
+  }, []);
+
+  const openQuickTool = useCallback((id: string) => {
+    setQuickTool(id);
+    const label = QUICK_TOOLS.find((q) => q.id === id)?.label ?? "Outil";
+    setToast(`Ouverture : ${label}`);
+    window.setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  useEffect(() => {
+    if (!previewFs) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewFs(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewFs]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -109,6 +183,15 @@ export function SessionShell({
       }
     });
   }, [mode, methodIds, projectId, meetingId, sessionId]);
+
+  useEffect(() => {
+    if (!previewFs) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewFs(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewFs]);
 
   const persist = useCallback(
     async (nextStates: Record<string, SessionState>, idx: number) => {
@@ -218,13 +301,11 @@ export function SessionShell({
 
   if (finishedMeeting) {
     return (
-      <DashboardShell>
-        <SessionReportPage
-          meeting={finishedMeeting}
-          onViewJournal={() => setViewJournal(true)}
-          onReplay={() => router.push("/dashboard/session")}
-        />
-      </DashboardShell>
+      <SessionReportPage
+        meeting={finishedMeeting}
+        onViewJournal={() => setViewJournal(true)}
+        onReplay={() => router.push("/dashboard/session")}
+      />
     );
   }
 
@@ -244,30 +325,32 @@ export function SessionShell({
         onSelectMethod={goMethod}
         projectId={projectId}
         mode={mode}
+        durationMin={durationMin}
+        capture={capture}
+        onPrivateNotesChange={(text) => setCapture((c) => setPrivateNotes(c, text))}
+        onDiscussionSend={(text) => {
+          setCapture((c) => appendDiscussion(c, text));
+          journalize({
+            kind: "Discussion",
+            icon: "MessageSquare",
+            color: "blue",
+            q: text,
+            result: "Message enregistré",
+          });
+        }}
+        onOpenQuickTool={openQuickTool}
       />
     );
 
   const votePanel = (
     <SessionVotePanel
       projectId={projectId}
-      onVoteClosed={({ question, options, total }) => {
-        setCapture((c) =>
-          appendVote(c, {
-            kind: "Vote pondéré",
-            q: question,
-            total,
-            options,
-          }),
-        );
-        setToast("Vote enregistré dans le journal");
-        window.setTimeout(() => setToast(null), 2200);
-      }}
+      onVoteClosed={handleVoteClosed}
     />
   );
 
   return (
-    <DashboardShell>
-      <div className="space-y-3" data-testid="session-shell">
+    <div className="space-y-3" data-testid="session-shell">
         {simulating && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
             Mode simulation — cette séance ne créera pas de rencontre terminée dans l&apos;historique.
@@ -304,7 +387,14 @@ export function SessionShell({
             {
               label: "Changer le design",
               icon: <SlidersHorizontal className="h-4 w-4" />,
-              onClick: () => setToast("Utilisez le menu Design dans la bannière de la méthode"),
+              onClick: () => {
+                setFocusMode((f) => {
+                  const next = !f;
+                  setToast(next ? "Mode présentation activé" : "Mode présentation désactivé");
+                  window.setTimeout(() => setToast(null), 2400);
+                  return next;
+                });
+              },
             },
             {
               label: "Partager la séance",
@@ -324,10 +414,16 @@ export function SessionShell({
             <SessionRightHub
               methodIds={methodIds}
               activeMethodId={currentMethodId}
+              projectId={projectId}
+              durationMin={durationMin}
               onSelectMethod={goMethod}
-              onOpenQuickTool={setQuickTool}
+              onOpenQuickTool={openQuickTool}
+              onOpenProjectTool={openProjectTool}
+              onOpenDocuments={() => router.push("/dashboard/documents")}
               onPreviewFullscreen={() => setPreviewFs((f) => !f)}
               previewFullscreen={previewFs}
+              assistContext={assistContext}
+              onOpenAmaris={() => setAiOpen(true)}
             />
           }
           footer={
@@ -355,6 +451,7 @@ export function SessionShell({
               <SessionAiPanel
                 open={aiOpen}
                 methodTitle={methodMeta?.title ?? currentMethodId}
+                objective={sessTitle || objective}
                 onClose={() => setAiOpen(false)}
               />
               <SessionQuickToolModal
@@ -362,6 +459,17 @@ export function SessionShell({
                 onClose={() => setQuickTool(null)}
                 onJournalize={journalize}
               />
+              {projectTool && (
+                <MethodLiveOverlay
+                  item={projectTool}
+                  context="session"
+                  onClose={() => setProjectTool(null)}
+                  onToast={(msg) => {
+                    setToast(msg);
+                    window.setTimeout(() => setToast(null), 2400);
+                  }}
+                />
+              )}
               <SessionConfirmDialog
                 open={confirmEnd}
                 title="Terminer la séance ?"
@@ -392,12 +500,11 @@ export function SessionShell({
           }
         >
           {activeRail === "seance" && <div className="mb-4 lg:hidden">{votePanel}</div>}
-          <div className={previewFs ? "fixed inset-0 z-[800] overflow-y-auto bg-background p-6" : undefined}>
+          <div className={previewFs ? "absolute inset-0 z-20 overflow-y-auto bg-background p-6" : undefined}>
             {centerContent}
           </div>
           {activeRail === "seance" && <div className="mt-6 hidden lg:block">{votePanel}</div>}
         </SessionMethodShell>
       </div>
-    </DashboardShell>
   );
 }

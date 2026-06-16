@@ -50,7 +50,6 @@ export function ProjetsPage() {
   const [showAll, setShowAll] = useState(false);
   const [sortBy, setSortBy] = useState("modified");
   const [sortOpen, setSortOpen] = useState(false);
-  const [rowMenu, setRowMenu] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ project: DisplayProject; action: "delete" | "archive" } | null>(null);
   const [sched, setSched] = useState<DisplayProject | null>(null);
   const [renaming, setRenaming] = useState<DisplayProject | null>(null);
@@ -128,7 +127,6 @@ export function ProjetsPage() {
   const toggleFav = (id: string) => store.toggleProjectStar(id);
 
   const doRowAction = (p: DisplayProject, a: string) => {
-    setRowMenu(null);
     if (a === "fav") {
       toggleFav(p.id);
       flash(p.star ? `« ${p.name} » retiré des favoris` : `« ${p.name} » ajouté aux favoris`);
@@ -218,8 +216,6 @@ export function ProjetsPage() {
     onOpen: () => setOpenProject(p),
     onFav: () => toggleFav(p.id),
     onMeetings: () => router.push("/dashboard/rencontres"),
-    onMenu: () => setRowMenu(rowMenu === p.id ? null : p.id),
-    menuOpen: rowMenu === p.id,
     onPostMortem: () => setOpenProject(p),
     actions: [
       { id: "fav", icon: "Star", label: p.star ? "Retirer des favoris" : "Ajouter aux favoris" },
@@ -227,7 +223,6 @@ export function ProjetsPage() {
     ],
     onAction: (a: string) => doRowAction(p, a),
     onSched: () => setSched(p),
-    closeMenu: () => setRowMenu(null),
   });
 
   return (

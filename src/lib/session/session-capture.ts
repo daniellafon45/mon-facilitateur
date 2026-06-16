@@ -10,6 +10,8 @@ export interface SessionCaptureState {
   quickLog: MeetingQuickLogEntry[];
   votes: MeetingVoteEntry[];
   notes: MeetingNoteEntry[];
+  privateNotes: string;
+  discussion: { author: string; text: string; time: string }[];
 }
 
 export function createSessionCapture(): SessionCaptureState {
@@ -18,6 +20,8 @@ export function createSessionCapture(): SessionCaptureState {
     quickLog: [],
     votes: [],
     notes: [],
+    privateNotes: "",
+    discussion: [],
   };
 }
 
@@ -66,6 +70,25 @@ export function appendVote(
       { ...vote, time: captureTimeLabel() },
     ],
   };
+}
+
+export function appendDiscussion(
+  capture: SessionCaptureState,
+  text: string,
+  author = "Vous",
+): SessionCaptureState {
+  if (!text.trim()) return capture;
+  return {
+    ...capture,
+    discussion: [
+      ...capture.discussion,
+      { author, text: text.trim(), time: captureTimeLabel() },
+    ],
+  };
+}
+
+export function setPrivateNotes(capture: SessionCaptureState, text: string): SessionCaptureState {
+  return { ...capture, privateNotes: text };
 }
 
 export function finalizeCaptureTiming(capture: SessionCaptureState): SessionCaptureState {

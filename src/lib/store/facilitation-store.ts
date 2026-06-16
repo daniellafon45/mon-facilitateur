@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 import type { ExtendedTaskItem, Meeting, MeetingTaskEntry, Project, SessionMode, ActiveSessionPayload } from "@/types/facilitation";
 import type { SessionState } from "@/components/session/methods/column-workspace";
 import { buildMeetingSnapshot, snapshotSummaryFromSession } from "@/lib/meetings/build-meeting-snapshot";
-import { finalizeCaptureTiming, type SessionCaptureState } from "@/lib/session/session-capture";
+import { createSessionCapture, finalizeCaptureTiming, type SessionCaptureState } from "@/lib/session/session-capture";
 import { formatFrDate, ICON_PALETTES } from "@/lib/projets/constants";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -498,12 +498,7 @@ export const useFacilitationStore = create<FacilitationStore>()(
           name,
           projectId,
           methodIds: methodTitle ? [methodTitle] : [],
-          capture: finalizeCaptureTiming({
-            startedAt: new Date().toISOString(),
-            quickLog: [],
-            votes: [],
-            notes: [],
-          }),
+          capture: finalizeCaptureTiming(createSessionCapture()),
           methodStates: {},
         });
       },

@@ -301,6 +301,8 @@ export interface MeetingAgendaBlock {
   docs?: string[];
   kind?: "focus" | "pause" | "synthèse" | "breakout" | "plénière" | "intro";
   activity?: string;
+  /** Clé illustration (groupe agenda Nano Banana 2) */
+  imageId?: string;
 }
 
 export interface MeetingAgendaTiming {

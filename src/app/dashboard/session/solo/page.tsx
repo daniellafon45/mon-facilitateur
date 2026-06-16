@@ -14,6 +14,7 @@ export default function SoloSessionPage() {
       meetingId={session.meetingId}
       objective={session.objective}
       simulating={session.simulating}
+      durationMin={session.durationMin ?? 60}
     />
   );
 }

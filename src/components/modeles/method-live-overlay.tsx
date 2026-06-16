@@ -38,9 +38,11 @@ interface MethodLiveOverlayProps {
   item: LibMethodItem;
   onClose: () => void;
   onToast?: (msg: string) => void;
+  /** En séance live : masque le CTA « Utiliser en séance » et adapte le libellé. */
+  context?: "library" | "session";
 }
 
-export function MethodLiveOverlay({ item, onClose, onToast }: MethodLiveOverlayProps) {
+export function MethodLiveOverlay({ item, onClose, onToast, context = "library" }: MethodLiveOverlayProps) {
   const [mounted, setMounted] = useState(false);
   const [saveDialog, setSaveDialog] = useState<SaveMethodDialogMode | null>(null);
   const [saving, setSaving] = useState(false);
@@ -68,21 +70,6 @@ export function MethodLiveOverlay({ item, onClose, onToast }: MethodLiveOverlayP
     setMounted(true);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // #region agent log
-    fetch("http://127.0.0.1:7832/ingest/7be77228-998b-4d1e-b4e0-c2eb9fd16e21", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ae2140" },
-      body: JSON.stringify({
-        sessionId: "ae2140",
-        runId: "post-fix",
-        hypothesisId: "A",
-        location: "method-live-overlay.tsx:mount",
-        message: "MethodLiveOverlay mounted",
-        data: { methodId: item.id, projectCount: projects.length },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return () => {
       document.body.style.overflow = prev;
     };
@@ -222,12 +209,14 @@ export function MethodLiveOverlay({ item, onClose, onToast }: MethodLiveOverlayP
 
   const isFull = item.full || item.id === "tableau-blanc";
 
+  const isSession = context === "session";
+
   if (!mounted) return null;
 
   return createPortal(
     <>
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-5"
+      className="fixed inset-0 z-[2500] flex items-center justify-center p-3 sm:p-5"
       onClick={() => {
         if (saveDialog || wbSubdialog) return;
         onClose();
@@ -250,7 +239,7 @@ export function MethodLiveOverlay({ item, onClose, onToast }: MethodLiveOverlayP
           <div className="min-w-0 flex-1">
             <p id="method-live-title" className="truncate font-extrabold">{item.title}</p>
             <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
-              <Eye className="h-3 w-3" /> Test libre — non enregistré
+              <Eye className="h-3 w-3" /> {isSession ? "Outil de séance" : "Test libre — non enregistré"}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -259,18 +248,20 @@ export function MethodLiveOverlay({ item, onClose, onToast }: MethodLiveOverlayP
                 <Download className="mr-1 h-4 w-4" /> Télécharger
               </Button>
             )}
-            <Button
-              size="sm"
-              className="rounded-xl"
-              onClick={() => {
-                onClose();
-                onToast?.(`« ${item.title} » s'ouvrira dans votre prochaine séance`);
-              }}
-            >
-              <ArrowRight className="mr-1 h-4 w-4" />
-              <span className="hidden sm:inline">Utiliser en séance</span>
-              <span className="sm:hidden">Séance</span>
-            </Button>
+            {!isSession && (
+              <Button
+                size="sm"
+                className="rounded-xl"
+                onClick={() => {
+                  onClose();
+                  onToast?.(`« ${item.title} » s'ouvrira dans votre prochaine séance`);
+                }}
+              >
+                <ArrowRight className="mr-1 h-4 w-4" />
+                <span className="hidden sm:inline">Utiliser en séance</span>
+                <span className="sm:hidden">Séance</span>
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="rounded-xl" onClick={onClose} aria-label="Fermer">
               <X className="h-5 w-5" />
             </Button>

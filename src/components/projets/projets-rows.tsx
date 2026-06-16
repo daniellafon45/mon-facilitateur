@@ -3,7 +3,7 @@
 import type { DisplayProject } from "@/types/facilitation";
 import { formatShortDate, priorityMeta, statusMeta } from "@/lib/projets/constants";
 import { getCachedProjectMembers } from "@/lib/hooks/use-project-members";
-import { RowMenu } from "@/components/projets/projets-modals";
+import { ProjectRowActionsMenu } from "@/components/projets/project-row-actions-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -124,12 +124,9 @@ interface RowProps {
   onOpen: () => void;
   onFav: () => void;
   onMeetings: () => void;
-  onMenu: () => void;
-  menuOpen: boolean;
   actions: readonly { id: string; icon: string; label: string; danger?: boolean }[];
   onAction: (id: string) => void;
   onSched: () => void;
-  closeMenu: () => void;
   onPostMortem: () => void;
 }
 
@@ -164,7 +161,7 @@ export function ProjectListHeader() {
 }
 
 export function ProjectRow({
-  p, last, membersRefreshKey, onOpen, onMeetings, onMenu, menuOpen, actions, onAction, onSched, closeMenu, onPostMortem,
+  p, last, membersRefreshKey, onOpen, onMeetings, actions, onAction, onSched, onPostMortem,
 }: RowProps) {
   const sm = statusMeta(p.statusId);
   return (
@@ -208,15 +205,7 @@ export function ProjectRow({
               <Button size="sm" className="rounded-lg h-8" onClick={onOpen}>Ouvrir</Button>
             </>
           )}
-          <button
-            type="button"
-            onClick={onMenu}
-            className="inline-flex h-8 items-center justify-center rounded-lg px-2 text-sm font-medium text-slate-600 hover:bg-muted"
-            title="Plus d'actions"
-          >
-            Plus
-          </button>
-          {menuOpen && <RowMenu actions={actions} onAction={onAction} onClose={closeMenu} />}
+          <ProjectRowActionsMenu actions={actions} onAction={onAction} />
         </div>
       </td>
     </tr>
@@ -224,26 +213,19 @@ export function ProjectRow({
 }
 
 export function ProjectGridCard(props: RowProps) {
-  const { p, membersRefreshKey, onOpen, onMeetings, onMenu, menuOpen, actions, onAction, closeMenu, onPostMortem } = props;
+  const { p, membersRefreshKey, onOpen, onMeetings, actions, onAction, onPostMortem } = props;
   const sm = statusMeta(p.statusId);
   return (
     <div
       onClick={onOpen}
-      className="relative cursor-pointer rounded-[14px] border bg-background p-4 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+      className="relative cursor-pointer rounded-[14px] border bg-background p-4 transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
     >
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15.5px] font-extrabold leading-tight text-slate-900">{p.name}</div>
         </div>
         <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={onMenu}
-            className="inline-flex h-8 items-center justify-center rounded-lg px-2 text-sm font-medium text-slate-600 hover:bg-muted"
-          >
-            Plus
-          </button>
-          {menuOpen && <RowMenu actions={actions} onAction={onAction} onClose={closeMenu} />}
+          <ProjectRowActionsMenu actions={actions} onAction={onAction} />
         </div>
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-2">

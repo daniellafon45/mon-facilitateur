@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, X } from "lucide-react";
+import { MotionOverlay } from "@/components/ui/motion-overlay";
+import { MOTION_DURATION } from "@/lib/motion/tokens";
 
 export function useProjetsToast() {
   const [toast, setToast] = useState("");
@@ -36,25 +38,36 @@ export function MfDrawer({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
+  const [open, setOpen] = useState(true);
+
+  const requestClose = useCallback(() => {
+    setOpen(false);
+    window.setTimeout(onClose, MOTION_DURATION.overlay * 1000);
   }, [onClose]);
 
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestClose();
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [requestClose]);
+
   return (
-    <>
-      <div className="fixed inset-0 z-[1100] bg-slate-900/35 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed top-0 right-0 bottom-0 z-[1101] flex w-[380px] max-w-[92vw] flex-col bg-background shadow-[-12px_0_40px_rgba(15,23,42,.18)] animate-in slide-in-from-right duration-200">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <span className="text-[17px] font-extrabold tracking-tight">{title}</span>
-          <button type="button" onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted" title="Fermer">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
-        {footer && <div className="flex gap-2.5 border-t px-5 py-3.5">{footer}</div>}
+    <MotionOverlay open={open} onClose={requestClose} variant="drawer-right" zIndex={1100}>
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <span className="text-[17px] font-extrabold tracking-tight">{title}</span>
+        <button
+          type="button"
+          onClick={requestClose}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted"
+          title="Fermer"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
-    </>
+      <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      {footer && <div className="flex gap-2.5 border-t px-5 py-3.5">{footer}</div>}
+    </MotionOverlay>
   );
 }

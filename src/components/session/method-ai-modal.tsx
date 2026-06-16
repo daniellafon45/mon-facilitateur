@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MotionOverlay } from "@/components/ui/motion-overlay";
 import { cn } from "@/lib/utils";
 
 interface Suggestion {
@@ -130,20 +131,18 @@ export function MethodAiModal({
     }
   }
 
-  if (!open) return null;
-
   const chosen = suggestions.filter((s) => s.on);
 
   return (
-    <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm"
-      onClick={onClose}
+    <MotionOverlay
+      open={open}
+      onClose={onClose}
+      variant="center"
+      zIndex={1000}
+      className="bg-slate-900/45 backdrop-blur-sm"
+      panelClassName="max-w-lg flex max-h-[88vh] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
     >
-      <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 border-b bg-gradient-to-r from-primary/10 to-background px-4 py-3">
+      <div className="flex items-center gap-3 border-b bg-gradient-to-r from-primary/10 to-background px-4 py-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -242,7 +241,6 @@ export function MethodAiModal({
             Insérer {chosen.length} idée{chosen.length > 1 ? "s" : ""}
           </Button>
         </div>
-      </div>
-    </div>
+    </MotionOverlay>
   );
 }

@@ -175,7 +175,7 @@ export function MethodWorkspaceShell({
       )}
     >
       {!embedded && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-4 py-3 shadow-sm">
+        <div className="relative mb-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-4 py-3 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div
               className={cn(
@@ -236,7 +236,7 @@ export function MethodWorkspaceShell({
                 </Button>
                 {durOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setDurOpen(false)} />
+                    <div className="absolute inset-0 z-40" onClick={() => setDurOpen(false)} />
                     <div className="absolute right-0 top-full z-50 mt-1 min-w-[168px] rounded-xl border bg-popover p-1 shadow-lg">
                       <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                         Durée de l&apos;étape
@@ -282,7 +282,7 @@ export function MethodWorkspaceShell({
               </Button>
               {designOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setDesignOpen(false)} />
+                  <div className="absolute inset-0 z-40" onClick={() => setDesignOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border bg-popover p-1 shadow-lg">
                     <p className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Saturation</p>
                     {(
@@ -353,7 +353,7 @@ export function MethodWorkspaceShell({
               </Button>
               {exportOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+                  <div className="absolute inset-0 z-40" onClick={() => setExportOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border bg-popover p-1 shadow-lg">
                     {(
                       [
@@ -389,7 +389,7 @@ export function MethodWorkspaceShell({
               )}
               {shareOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
+                  <div className="absolute inset-0 z-40" onClick={() => setShareOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border bg-popover p-3 shadow-lg">
                     <p className="mb-2 text-sm font-extrabold">Envoyer le BMC</p>
                     <p className="mb-2 text-[10px] font-bold uppercase text-muted-foreground">Destinataires</p>
@@ -450,7 +450,7 @@ export function MethodWorkspaceShell({
               </Button>
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border bg-popover p-1 shadow-lg">
                     <button
                       type="button"

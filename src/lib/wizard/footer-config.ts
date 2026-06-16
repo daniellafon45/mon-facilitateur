@@ -1,6 +1,10 @@
-import type { SessionMode } from "@/types/facilitation";
+import type { SessionMode, WizardLaunchMode } from "@/types/facilitation";
 
-export function getWizardContinueLabel(stepKey: string, mode: SessionMode | null): string {
+export function getWizardContinueLabel(
+  stepKey: string,
+  mode: SessionMode | null,
+  launchMode?: WizardLaunchMode,
+): string {
   switch (stepKey) {
     case "agenda":
       if (mode === "solo") return "Configurer la session";
@@ -11,6 +15,12 @@ export function getWizardContinueLabel(stepKey: string, mode: SessionMode | null
     case "e4":
       return "Continuer";
     case "e7":
+      if (launchMode === "schedule") {
+        return mode === "solo" ? "Programmer ma session" : "Programmer la rencontre";
+      }
+      if (launchMode === "simulate") {
+        return mode === "solo" ? "Simuler ma session" : "Simuler la rencontre";
+      }
       if (mode === "solo") return "Lancer ma session";
       return "Lancer la rencontre";
     case "1":
@@ -41,9 +51,7 @@ export function getWizardFooterHint(
         ? `${ctx.genreTitle} · ${ctx.genreDur ?? ""}`
         : "Sélectionnez un genre pour continuer";
     case "method":
-      return ctx.methodCount
-        ? `${ctx.methodCount} méthode${ctx.methodCount > 1 ? "s" : ""}`
-        : "Choisissez au moins une méthode";
+      return "";
     case "agenda":
       return ctx.agendaBlocks
         ? `${ctx.agendaBlocks} blocs · ${ctx.agendaMin ?? 0} min`

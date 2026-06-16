@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Layout, Tag } from "lucide-react";
-import { wbpNote } from "@/lib/whiteboard/elements";
+import type { WhiteboardBoardHandle } from "@/components/whiteboard/whiteboard-board";
+import { wbpNote, type WbElement } from "@/lib/whiteboard/elements";
 import { useWizardStore } from "@/lib/store/wizard-store";
 import { getProjectUniverse, getWorkMode } from "@/lib/wizard/project-types";
 import { GENRE_BY_ID } from "@/lib/methods/session-genres";
@@ -22,7 +23,11 @@ const WhiteboardBoard = dynamic(
   },
 );
 
-export function WizardWhiteboardStep() {
+export function WizardWhiteboardStep({
+  boardExportRef,
+}: {
+  boardExportRef?: RefObject<WhiteboardBoardHandle | null>;
+}) {
   const ptype = useWizardStore((s) => s.ptype);
   const mode = useWizardStore((s) => s.mode);
   const genre = useWizardStore((s) => s.genre);
@@ -36,6 +41,41 @@ export function WizardWhiteboardStep() {
   const setTextMode = useWizardStore((s) => s.setWhiteboardTextMode);
   const seededObjective = useRef(false);
   const [ready, setReady] = useState(false);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBoardRef = useRef<{
+    elements: WbElement[];
+    view: { tx: number; ty: number; k: number };
+  } | null>(null);
+
+  const flushWhiteboard = useCallback(() => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    const pending = pendingBoardRef.current;
+    if (pending) {
+      setWhiteboard(pending.elements, pending.view);
+      pendingBoardRef.current = null;
+    }
+  }, [setWhiteboard]);
+
+  const handleElementsChange = useCallback(
+    (elements: WbElement[], view: { tx: number; ty: number; k: number }) => {
+      pendingBoardRef.current = { elements, view };
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = null;
+        const next = pendingBoardRef.current;
+        if (next) {
+          setWhiteboard(next.elements, next.view);
+          pendingBoardRef.current = null;
+        }
+      }, 300);
+    },
+    [setWhiteboard],
+  );
+
+  useEffect(() => () => flushWhiteboard(), [flushWhiteboard]);
 
   const universe = getProjectUniverse(ptype);
   const modeMeta = getWorkMode(mode);
@@ -110,11 +150,13 @@ export function WizardWhiteboardStep() {
         </div>
       ) : ready ? (
         <WhiteboardBoard
+          ref={boardExportRef}
           className="min-h-[min(480px,55vh)] flex-1 rounded-none border-0 shadow-none"
           height="100%"
           initialElements={elements}
           initialView={view}
-          onElementsChange={(els, v) => setWhiteboard(els, v)}
+          onElementsChange={handleElementsChange}
+          onEditingBlur={flushWhiteboard}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">

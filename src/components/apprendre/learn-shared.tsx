@@ -13,6 +13,7 @@ import {
 import { LEVEL_BG, LEVEL_COLOR, LEARN_PAL } from "@/lib/learn/data";
 import { MethodIcon, MethodIconTile } from "@/components/modeles/method-icon";
 import { Button } from "@/components/ui/button";
+import { MotionOverlay } from "@/components/ui/motion-overlay";
 import { cn } from "@/lib/utils";
 
 export function LevelBadge({ level }: { level?: string }) {
@@ -186,24 +187,24 @@ export function LearnDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[1400] flex justify-end bg-foreground/40" onClick={onClose}>
-      <div
-        className="flex h-full w-[420px] max-w-[92vw] flex-col bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
-          <div className="text-base font-extrabold">{title}</div>
-          <button type="button" onClick={onClose} className="rounded-lg bg-muted p-2 text-muted-foreground hover:bg-muted/80">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
-        {footer && <div className="shrink-0 border-t px-5 py-3.5">{footer}</div>}
+    <MotionOverlay
+      open={open}
+      onClose={onClose}
+      variant="drawer-right"
+      zIndex={1400}
+      className="bg-foreground/40"
+      panelClassName="w-[420px] bg-card shadow-2xl"
+    >
+      <div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
+        <div className="text-base font-extrabold">{title}</div>
+        <button type="button" onClick={onClose} className="rounded-lg bg-muted p-2 text-muted-foreground hover:bg-muted/80">
+          <X className="h-4 w-4" />
+        </button>
       </div>
-    </div>
+      <div className="flex-1 overflow-y-auto p-5">{children}</div>
+      {footer && <div className="shrink-0 border-t px-5 py-3.5">{footer}</div>}
+    </MotionOverlay>
   );
 }
 
@@ -222,44 +223,53 @@ export function VideoModal({ video, onClose }: { video: LearnVideo | null; onClo
     return () => window.removeEventListener("keydown", onKey);
   }, [video, onClose]);
 
-  if (!video) return null;
-
-  const src = `https://www.youtube-nocookie.com/embed/${video.vid}?autoplay=1&rel=0&modestbranding=1`;
+  const src = video
+    ? `https://www.youtube-nocookie.com/embed/${video.vid}?autoplay=1&rel=0&modestbranding=1`
+    : "";
 
   return (
-    <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/80 p-6" onClick={onClose}>
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-[#0b0f17] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-600 text-white text-xs font-bold">▶</span>
-            <div className="truncate text-sm font-bold text-white">{video.title}</div>
+    <MotionOverlay
+      open={Boolean(video)}
+      onClose={onClose}
+      variant="center"
+      zIndex={1500}
+      className="bg-black/80"
+      panelClassName="max-w-4xl overflow-hidden rounded-2xl bg-[#0b0f17] shadow-2xl"
+    >
+      {video && (
+        <>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-600 text-white text-xs font-bold">▶</span>
+              <div className="truncate text-sm font-bold text-white">{video.title}</div>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg bg-white/10 p-2 text-white">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg bg-white/10 p-2 text-white">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="relative aspect-video bg-black">
-          <iframe
-            src={src}
-            title={video.title}
-            allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            className="absolute inset-0 h-full w-full border-0"
-          />
-        </div>
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="text-xs font-semibold text-white/60">{video.channel}</div>
-          <a
-            href={`https://www.youtube.com/watch?v=${video.vid}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-bold text-white/85 hover:underline"
-          >
-            Ouvrir sur YouTube <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-      </div>
-    </div>
+          <div className="relative aspect-video bg-black">
+            <iframe
+              src={src}
+              title={video.title}
+              allow="accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              className="absolute inset-0 h-full w-full border-0"
+            />
+          </div>
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <div className="text-xs font-semibold text-white/60">{video.channel}</div>
+            <a
+              href={`https://www.youtube.com/watch?v=${video.vid}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-bold text-white/85 hover:underline"
+            >
+              Ouvrir sur YouTube <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </>
+      )}
+    </MotionOverlay>
   );
 }
 

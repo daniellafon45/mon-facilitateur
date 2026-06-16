@@ -1,23 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, CheckCircle2, User, Users } from "lucide-react";
+import { CheckCircle2, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   adjustDurationOptions,
   fmtMin,
   GENRE_BY_ID,
-  GENRE_PAL,
   GENRE_PAL_BG,
   presentGenreThemes,
   visibleGenreBands,
   type SessionGenre,
 } from "@/lib/methods/session-genres";
-import { MethodIcon } from "@/components/modeles/method-icon";
 import type { SessionMode } from "@/types/facilitation";
-import { WizardRecoModal } from "@/components/wizard/wizard-reco-modal";
-import { WizardAmarisButton } from "@/components/wizard/wizard-amaris-button";
+import { WizardImageSelectCard } from "@/components/wizard/wizard-image-select-card";
+import { getWizardIllustration, getWizardIllustrationFallback } from "@/lib/wizard/wizard-images";
 
 const MODE_META: Record<SessionMode, { label: string; icon: typeof User; color: string; hex: string }> = {
   solo: { label: "Solo", icon: User, color: "violet", hex: "#7c3aed" },
@@ -26,9 +24,9 @@ const MODE_META: Record<SessionMode, { label: string; icon: typeof User; color: 
 };
 
 function genreGridClass(count: number) {
-  if (count === 1) return "grid max-w-md gap-3";
-  if (count === 2) return "grid max-w-2xl gap-3 sm:grid-cols-2";
-  return "grid gap-3 sm:grid-cols-2 lg:grid-cols-3";
+  if (count === 1) return "grid max-w-sm gap-4";
+  if (count === 2) return "grid max-w-2xl gap-4 sm:grid-cols-2";
+  return "grid gap-4 sm:grid-cols-2 lg:grid-cols-3";
 }
 
 export function WizardGenreStep({
@@ -57,37 +55,17 @@ export function WizardGenreStep({
     const cats = new Set(visibleGenreBands(mode, "all").flatMap((b) => b.genres.flatMap((g) => g.cats)));
     return cats.has("start") ? "start" : "all";
   });
-  const [recoOpen, setRecoOpen] = useState(false);
 
   const bands = useMemo(() => visibleGenreBands(mode, theme), [mode, theme]);
   const themeTabs = useMemo(() => presentGenreThemes(mode), [mode]);
   const selGenre = genre ? GENRE_BY_ID[genre] : null;
 
-  const modeGenres = useMemo(
-    () => Object.values(GENRE_BY_ID).filter((g) => g.mode === mode),
-    [mode],
-  );
-
   return (
     <div className="mx-auto max-w-[980px] space-y-6">
-      <WizardRecoModal
-        open={recoOpen}
-        title="Genre de séance"
-        options={modeGenres.map((g) => ({ id: g.id, title: g.title, desc: `${g.dur} · ${g.desc}` }))}
-        onAccept={(id) => {
-          const g = GENRE_BY_ID[id];
-          if (g) onSelect(g);
-        }}
-        onClose={() => setRecoOpen(false)}
-      />
-
       <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-            Quel genre de séance préparez-vous ?
-          </h1>
-          <WizardAmarisButton onClick={() => setRecoOpen(true)} />
-        </div>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+          Quel genre de séance préparez-vous ?
+        </h1>
         <div className="flex flex-wrap items-center gap-2">
           <span
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold"
@@ -133,38 +111,24 @@ export function WizardGenreStep({
               <span className="text-xs text-muted-foreground">{band.range}</span>
             </div>
             <div className={genreGridClass(band.genres.length)}>
-              {band.genres.map((g) => {
-                const on = genre === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => onSelect(g)}
-                    onMouseEnter={() => onPreviewChange?.(g.id)}
-                    onMouseLeave={() => onPreviewChange?.(null)}
-                    onFocus={() => onPreviewChange?.(g.id)}
-                    onBlur={() => onPreviewChange?.(null)}
-                    className={cn(
-                      "relative rounded-xl border bg-background p-4 text-left transition-all",
-                      on ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/30",
-                    )}
-                  >
-                    {on && (
-                      <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                    <div
-                      className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg"
-                      style={{ background: GENRE_PAL_BG[g.color], color: GENRE_PAL[g.color] }}
-                    >
-                      <MethodIcon name={g.icon} className="h-4 w-4" />
-                    </div>
-                    <p className="pr-6 text-sm font-extrabold">{g.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{g.dur}</p>
-                  </button>
-                );
-              })}
+              {band.genres.map((g) => (
+                <WizardImageSelectCard
+                  key={g.id}
+                  testId={`genre-${g.id}`}
+                  imageSrc={getWizardIllustration(g.id)}
+                  imageFallbackSrc={getWizardIllustrationFallback(g.id)}
+                  title={g.title}
+                  tag={band.label}
+                  metaLabel={g.dur}
+                  description={g.desc}
+                  selected={genre === g.id}
+                  onClick={() => onSelect(g)}
+                  onMouseEnter={() => onPreviewChange?.(g.id)}
+                  onMouseLeave={() => onPreviewChange?.(null)}
+                  onFocus={() => onPreviewChange?.(g.id)}
+                  onBlur={() => onPreviewChange?.(null)}
+                />
+              ))}
             </div>
           </section>
         ))}
@@ -200,11 +164,13 @@ export function GenrePreviewPanel({
 
   return (
     <div className="space-y-4">
-      <div
-        className="flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{ background: GENRE_PAL_BG[genre.color], color: GENRE_PAL[genre.color] }}
-      >
-        <MethodIcon name={genre.icon} className="h-5 w-5" />
+      <div className="relative h-28 w-full overflow-hidden rounded-xl">
+        <img
+          src={getWizardIllustrationFallback(genre.id) ?? getWizardIllustration(genre.id)}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
       </div>
       <div>
         <h3 className="font-extrabold">{genre.title}</h3>

@@ -132,9 +132,9 @@ export function SessionMethodShell({
         )}
       </nav>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
         {activeRail === "seance" && (
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+          <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
               <Calendar className="h-4 w-4 shrink-0 text-primary" />
               {onTitleChange ? (
@@ -180,7 +180,11 @@ export function SessionMethodShell({
                   </Button>
                   {menuOpen && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                      <div
+                        className="absolute inset-0 z-40"
+                        aria-hidden
+                        onClick={() => setMenuOpen(false)}
+                      />
                       <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-xl border bg-popover p-1 shadow-lg">
                         {menuActions.map((a, i) => (
                           <button
@@ -211,7 +215,7 @@ export function SessionMethodShell({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="relative flex-1 overflow-y-auto p-4">{children}</div>
 
         {footer && (
           <div className="shrink-0 border-t px-4 py-3">{footer}</div>
@@ -220,7 +224,7 @@ export function SessionMethodShell({
 
       <aside
         className={cn(
-          "shrink-0 border-l bg-background transition-all",
+          "relative z-30 shrink-0 border-l bg-background transition-all",
           rightCollapsed ? "w-12" : "w-72 lg:w-80",
         )}
       >

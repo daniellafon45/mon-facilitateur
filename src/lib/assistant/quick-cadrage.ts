@@ -72,7 +72,7 @@ export function buildQuickRecommendation(
 ): ChatRecommendation {
   const genre = SESSION_GENRES.find((g) => g.id === genreId) ?? SESSION_GENRES[0];
   const cat = genre.cats[0] ?? "ideas";
-  const reco = recommendMethod(cat, objective || genre.title);
+  const reco = recommendMethod(cat, objective || genre.title, { genreId: genre.id });
   const methodIds = reco.set.map(resolveMethodId);
 
   return {

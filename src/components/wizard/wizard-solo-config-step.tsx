@@ -5,6 +5,7 @@ import { Link2, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { EXTERNAL_TOOLS } from "@/lib/wizard/external-tools";
 import type { WizardSoloMusic } from "@/types/facilitation";
 
 const MUSIC_SOURCES = [
@@ -21,16 +22,6 @@ const AMBIANCES = [
   { id: "waves", label: "Vagues" },
   { id: "wind", label: "Vent" },
   { id: "forest", label: "Forêt" },
-];
-
-const EXTERNAL_TOOLS = [
-  { id: "chatgpt", label: "ChatGPT", color: "bg-emerald-100 text-emerald-700" },
-  { id: "claude", label: "Claude", color: "bg-orange-100 text-orange-700" },
-  { id: "canva", label: "Canva", color: "bg-violet-100 text-violet-700" },
-  { id: "figma", label: "Figma", color: "bg-rose-100 text-rose-700" },
-  { id: "gdocs", label: "Google Docs", color: "bg-blue-100 text-blue-700" },
-  { id: "youtube", label: "YouTube", color: "bg-red-100 text-red-700" },
-  { id: "miro", label: "Miro", color: "bg-amber-100 text-amber-700" },
 ];
 
 export function WizardSoloConfigStep({
@@ -124,7 +115,16 @@ export function WizardSoloConfigStep({
                   on ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary/30",
                 )}
               >
-                <span className={cn("rounded-lg px-2 py-1 text-xs font-extrabold", t.color)}>{t.label[0]}</span>
+                <span className="flex h-10 w-10 items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={t.logo}
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
+                  />
+                </span>
                 <span className="text-sm font-bold">{t.label}</span>
                 {on && (
                   <Button type="button" variant="outline" size="sm" className="h-7 rounded-lg text-xs">

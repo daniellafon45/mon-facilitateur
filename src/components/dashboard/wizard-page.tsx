@@ -1,11 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { useWizardStore } from "@/lib/store/wizard-store";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
-import { STEP_KEYS, getStepPath, getStepRoute, getHeaderStepLabels } from "@/lib/wizard/steps";
+import { STEP_LABELS, STEP_KEYS, getStepPath, getStepRoute } from "@/lib/wizard/steps";
 import {
   defaultRightCollapsed,
   getWizardContinueLabel,
@@ -13,6 +12,7 @@ import {
   STEP_HAS_RIGHT_PANEL,
 } from "@/lib/wizard/footer-config";
 import { finishWizard } from "@/lib/wizard/finish-wizard";
+import { PageTransition, type WizardDirection } from "@/components/ui/page-transition";
 import { WizardShell } from "@/components/wizard/wizard-shell";
 import {
   WizardProjectTypeStep,
@@ -25,10 +25,13 @@ import { WizardAgendaStep } from "@/components/wizard/wizard-agenda-step";
 import { WizardSoloConfigStep } from "@/components/wizard/wizard-solo-config-step";
 import { WizardTeamStep } from "@/components/wizard/wizard-team-step";
 import { WizardInviteStep, InvitePreviewPanel } from "@/components/wizard/wizard-invite-step";
+import { WizardMethodFooterSummary } from "@/components/wizard/wizard-method-footer-summary";
 import { GENRE_BY_ID } from "@/lib/methods/session-genres";
 import { agendaTotalMinutes } from "@/lib/meetings/agenda-generator";
-import { objectiveFromWhiteboard } from "@/lib/whiteboard/objective-from-board";
-import type { ProjectTypeId } from "@/lib/wizard/project-types";
+import { shouldExportBoardImage } from "@/lib/whiteboard/describe-board";
+import { exportBoardImageBase64 } from "@/lib/whiteboard/export-board-image";
+import type { WhiteboardBoardHandle } from "@/components/whiteboard/whiteboard-board";
+import { getProjectUniverse, type ProjectTypeId } from "@/lib/wizard/project-types";
 import type { SessionMode } from "@/types/facilitation";
 
 function stepSlugToKey(stepSlug: string) {
@@ -44,42 +47,43 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
   const setWizardSeed = useFacilitationStore((s) => s.setWizardSeed);
   const wizard = useWizardStore();
   const [finishing, setFinishing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const boardExportRef = useRef<WhiteboardBoardHandle | null>(null);
   const [genrePreviewId, setGenrePreviewId] = useState<string | null>(null);
   const seedApplied = useRef(false);
   const explicitNavRef = useRef(false);
+  const pendingStepKeyRef = useRef<string | null>(null);
+  const stepDirectionRef = useRef<WizardDirection>("forward");
+  const finishingSnapshotRef = useRef<{ stepKey: string; stepIdx: number; path: string[] } | null>(null);
 
-  const path = getStepPath(wizard.mode);
+  const path = useMemo(() => getStepPath(wizard.mode), [wizard.mode]);
   const stepKey = path[wizard.stepIdx] ?? "0";
-  const headerStepLabels = getHeaderStepLabels(wizard.mode);
-  const currentSlug = STEP_KEYS[stepKey] ?? stepSlug;
+  const displayPath = finishing && finishingSnapshotRef.current ? finishingSnapshotRef.current.path : path;
+  const displayStepKey =
+    finishing && finishingSnapshotRef.current ? finishingSnapshotRef.current.stepKey : stepKey;
+  const displayStepIdx =
+    finishing && finishingSnapshotRef.current ? finishingSnapshotRef.current.stepIdx : wizard.stepIdx;
+  const stepLabels = displayPath.map((k) => STEP_LABELS[k] ?? "Étape");
 
   useEffect(() => {
-    if (stepSlug === "project-type" && wizard.mode && wizard.ptype) {
-      if (!explicitNavRef.current) {
-        const autoPath = getStepPath(wizard.mode);
-        const idx = Math.max(1, wizard.stepIdx);
-        const key = autoPath[idx] ?? "genre";
-        if (wizard.stepIdx < idx) useWizardStore.getState().setStepIdx(idx);
-        router.replace(getStepRoute(key));
-        return;
-      }
-      if (useWizardStore.getState().stepIdx !== 0) {
-        useWizardStore.getState().setStepIdx(0);
-      }
+    const key = stepSlugToKey(stepSlug);
+    if (!key) return;
+
+    if (explicitNavRef.current) {
+      const pending = pendingStepKeyRef.current;
+      if (pending && key !== pending) return;
       explicitNavRef.current = false;
+      pendingStepKeyRef.current = null;
+      const idx = path.indexOf(key);
+      if (idx >= 0) useWizardStore.getState().setStepIdx(idx);
       return;
     }
 
-    explicitNavRef.current = false;
-
-    const key = stepSlugToKey(stepSlug);
-    if (!key) return;
     const idx = path.indexOf(key);
-    if (idx < 0) return;
-    if (useWizardStore.getState().stepIdx !== idx) {
+    if (idx >= 0 && useWizardStore.getState().stepIdx !== idx) {
       useWizardStore.getState().setStepIdx(idx);
     }
-  }, [stepSlug, wizard.mode, wizard.genre, wizard.ptype, wizard.stepIdx, path, router]);
+  }, [stepSlug, path]);
 
   useEffect(() => {
     if (STEP_HAS_RIGHT_PANEL[stepKey]) {
@@ -108,7 +112,9 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
 
   function navigateToStep(idx: number) {
     if (idx < 0 || idx >= path.length) return;
+    stepDirectionRef.current = idx > wizard.stepIdx ? "forward" : "back";
     explicitNavRef.current = true;
+    pendingStepKeyRef.current = path[idx];
     wizard.setStepIdx(idx);
     router.push(getStepRoute(path[idx]));
   }
@@ -118,6 +124,7 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
       router.push("/dashboard");
       return;
     }
+    stepDirectionRef.current = "back";
     navigateToStep(wizard.stepIdx - 1);
   }
 
@@ -125,32 +132,96 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
     navigateToStep(0);
   }
 
-  function goNext() {
-    if (finishing) return;
-    if (currentSlug === "whiteboard") {
-      if (!wizard.objective.trim() && wizard.whiteboardElements.length > 0) {
-        wizard.setObjective(objectiveFromWhiteboard(wizard.whiteboardElements));
-      }
+  async function analyzeObjectiveAndRecommend() {
+    const w = useWizardStore.getState();
+    const genreEntry = w.genre ? GENRE_BY_ID[w.genre] : null;
+    const universe = getProjectUniverse(w.ptype);
+
+    let boardImage: string | null = null;
+    if (
+      !w.whiteboardTextMode &&
+      shouldExportBoardImage(w.whiteboardElements, w.objective)
+    ) {
+      boardImage =
+        (await boardExportRef.current?.exportImage()) ??
+        (await exportBoardImageBase64(w.whiteboardElements));
     }
+
+    const res = await fetch("/api/wizard/recommend-methods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        objective: w.objective,
+        elements: w.whiteboardElements,
+        boardImage,
+        context: {
+          mode: w.mode,
+          ptype: w.ptype,
+          ptypeTitle: universe?.title ?? "Non précisé",
+          genreId: w.genre,
+          genreTitle: genreEntry?.title ?? "Séance",
+          genreCat: genreEntry?.cats[0] ?? "ideas",
+          durationMin: w.genreMin || genreEntry?.idealMin || 75,
+        },
+      }),
+    });
+
+    if (!res.ok) throw new Error("Analyse impossible");
+
+    const data = (await res.json()) as {
+      objective: string;
+      methodIds: string[];
+      summary: string;
+    };
+
+    w.setObjective(data.objective);
+    w.setMethods(data.methodIds, false);
+    w.setMethodsAiSummary(data.summary);
+  }
+
+  function goNext() {
+    if (finishing || analyzing) return;
     const nextIdx = wizard.stepIdx + 1;
     if (nextIdx >= path.length) return;
-    wizard.setStepIdx(nextIdx);
-    router.push(getStepRoute(path[nextIdx]));
+    navigateToStep(nextIdx);
+  }
+
+  async function handleWhiteboardContinue() {
+    if (analyzing) return;
+    setAnalyzing(true);
+    try {
+      await analyzeObjectiveAndRecommend();
+      goNext();
+    } catch {
+      goNext();
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   async function handleFinish() {
     if (finishing) return;
+    finishingSnapshotRef.current = {
+      stepKey,
+      stepIdx: wizard.stepIdx,
+      path: [...path],
+    };
     setFinishing(true);
     try {
       await finishWizard({ wizard: useWizardStore.getState(), facilitation, router });
-    } finally {
+    } catch {
       setFinishing(false);
+      finishingSnapshotRef.current = null;
     }
   }
 
   function handleContinue() {
     if (stepKey === "e7") {
       void handleFinish();
+      return;
+    }
+    if (stepKey === "1") {
+      void handleWhiteboardContinue();
       return;
     }
     goNext();
@@ -177,7 +248,7 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
     }
   }
 
-  const footerHint = getWizardFooterHint(stepKey, {
+  const footerHint = getWizardFooterHint(displayStepKey, {
     genreTitle: selGenre?.title,
     genreDur: wizard.genreDur ?? selGenre?.dur,
     methodCount: wizard.methods.length,
@@ -186,13 +257,25 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
     objective: wizard.objective,
   });
 
-  const continueLabel = getWizardContinueLabel(stepKey, wizard.mode);
+  const continueLabel = getWizardContinueLabel(displayStepKey, wizard.mode, wizard.launchMode);
+
+  const footerSlot =
+    displayStepKey === "method" ? (
+      <WizardMethodFooterSummary
+        methods={wizard.methods}
+        targetMin={wizard.genreMin || (wizard.genre ? GENRE_BY_ID[wizard.genre]?.idealMin : 0) || 75}
+        onRemove={(id) => {
+          const next = wizard.methods.filter((m) => m !== id);
+          wizard.setMethods(next, true);
+        }}
+      />
+    ) : undefined;
 
   const rightPanel = (() => {
-    if (stepKey === "0") {
+    if (displayStepKey === "0") {
       return <ProjectTypePreviewPanel ptype={wizard.ptype} mode={wizard.mode} />;
     }
-    if (stepKey === "genre" && previewGenre) {
+    if (displayStepKey === "genre" && previewGenre) {
       const isSelected = wizard.genre === previewGenre.id;
       return (
         <GenrePreviewPanel
@@ -208,14 +291,14 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         />
       );
     }
-    if (stepKey === "e7") {
+    if (displayStepKey === "e7") {
       return <InvitePreviewPanel title={wizard.meetingTitle} agendaPlan={wizard.agendaPlan} />;
     }
     return null;
   })();
 
   const stepContent = (() => {
-    switch (stepKey) {
+    switch (displayStepKey) {
       case "0":
         return (
           <WizardProjectTypeStep
@@ -242,15 +325,17 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
           />
         );
       case "1":
-        return <WizardWhiteboardStep />;
+        return <WizardWhiteboardStep boardExportRef={boardExportRef} />;
       case "method":
         return (
           <WizardMethodStep
             objective={wizard.objective}
+            ptype={wizard.ptype}
             genreId={wizard.genre}
             genreMin={wizard.genreMin}
             methods={wizard.methods}
             methodsManual={wizard.methodsManual}
+            methodsAiSummary={wizard.methodsAiSummary}
             onObjectiveChange={wizard.setObjective}
             onMethodsChange={wizard.setMethods}
           />
@@ -260,6 +345,8 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
           <WizardAgendaStep
             mode={wizard.mode}
             methodIds={wizard.methods}
+            objective={wizard.objective}
+            genreTitle={selGenre?.title}
             genreMin={wizard.genreMin || 90}
             genreCondensed={wizard.genreCondensed}
             blocks={wizard.agendaPlan}
@@ -298,7 +385,6 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
             end={wizard.meetingEnd}
             platform={wizard.meetingPlatform}
             link={wizard.meetingLink}
-            launchMode={wizard.launchMode}
             agendaPlan={wizard.agendaPlan}
             onChange={wizard.setMeetingDetails}
             onSaveDraft={() => void wizard.persistDraft()}
@@ -310,14 +396,13 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
   })();
 
   const hasRightPanel =
-    stepKey === "0" ||
-    Boolean(STEP_HAS_RIGHT_PANEL[stepKey] && (stepKey !== "genre" || previewGenre) && rightPanel);
+    displayStepKey === "0" ||
+    Boolean(STEP_HAS_RIGHT_PANEL[displayStepKey] && (displayStepKey !== "genre" || previewGenre) && rightPanel);
 
   return (
-    <DashboardShell>
-      <WizardShell
-        steps={headerStepLabels}
-        current={wizard.stepIdx}
+    <WizardShell
+        steps={stepLabels}
+        current={displayStepIdx}
         mode={wizard.mode}
         ptype={wizard.ptype}
         onBack={goBack}
@@ -329,15 +414,22 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         hasRightPanel={hasRightPanel}
         rightPanel={rightPanel}
         footerHint={footerHint}
-        continueLabel={stepKey === "e7" ? (wizard.mode === "solo" ? "Lancer ma session" : "Lancer la rencontre") : continueLabel}
+        footerSlot={footerSlot}
+        continueLabel={analyzing ? "Amaris analyse…" : continueLabel}
         onContinue={handleContinue}
         continueDisabled={!canContinue()}
-        loading={finishing}
-        fullBleed={stepKey === "1"}
+        loading={finishing || analyzing}
+        fullBleed={displayStepKey === "1"}
+        busyOverlay={finishing}
       >
-        {stepContent}
+        <PageTransition
+          transitionKey={stepSlug}
+          variant="wizard"
+          direction={stepDirectionRef.current}
+        >
+          {stepContent}
+        </PageTransition>
       </WizardShell>
-    </DashboardShell>
   );
 }
 

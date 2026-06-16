@@ -38,6 +38,7 @@ interface WizardStoreState {
   method: string | null;
   methods: string[];
   methodsManual: boolean;
+  methodsAiSummary: string | null;
   stepIdx: number;
   projectId: string | null;
   rightCollapsed: boolean;
@@ -70,6 +71,7 @@ interface WizardStore extends WizardStoreState {
   setGenreMeta: (patch: { genreDur?: string; genreMin?: number; genreCondensed?: boolean }) => void;
   setMethod: (method: string | null) => void;
   setMethods: (methods: string[], manual?: boolean) => void;
+  setMethodsAiSummary: (summary: string | null) => void;
   setStepIdx: (idx: number) => void;
   setProjectId: (id: string | null) => void;
   setWhiteboard: (elements: WbElement[], view?: { tx: number; ty: number; k: number }) => void;
@@ -83,6 +85,7 @@ interface WizardStore extends WizardStoreState {
   setConfirmedGroups: (groups: WizardConfirmedGroup[] | null) => void;
   setGroupAssign: (assign: Record<string, WizardGroupAssign>) => void;
   setMeetingDetails: (patch: Partial<Pick<WizardStore, "meetingTitle" | "meetingDate" | "meetingStart" | "meetingEnd" | "meetingPlatform" | "meetingLink" | "launchMode">>) => void;
+  setLaunchMode: (launchMode: WizardLaunchMode) => void;
   setRightCollapsed: (collapsed: boolean) => void;
   seed: (data: Partial<WizardPayload>, options?: { skipPersist?: boolean }) => void;
   applyPayload: (data: WizardPayload, options?: { skipPersist?: boolean }) => void;
@@ -108,6 +111,7 @@ const INITIAL_STATE: WizardStoreState = {
   method: null,
   methods: [],
   methodsManual: false,
+  methodsAiSummary: null,
   stepIdx: 0,
   projectId: null,
   rightCollapsed: true,
@@ -254,9 +258,15 @@ export const useWizardStore = create<WizardStore>()(
       setGenreMeta: (patch) => { set(patch); void get().persistDraft(); },
       setMethod: (method) => { set({ method }); void get().persistDraft(); },
       setMethods: (methods, manual = true) => {
-        set({ methods, method: methods[0] ?? null, methodsManual: manual });
+        set({
+          methods,
+          method: methods[0] ?? null,
+          methodsManual: manual,
+          ...(manual ? { methodsAiSummary: null } : {}),
+        });
         void get().persistDraft();
       },
+      setMethodsAiSummary: (methodsAiSummary) => set({ methodsAiSummary }),
       setStepIdx: (stepIdx) => { set({ stepIdx }); void get().persistDraft(); },
       setProjectId: (projectId) => set({ projectId }),
       setWhiteboard: (whiteboardElements, whiteboardView) => {
@@ -276,6 +286,7 @@ export const useWizardStore = create<WizardStore>()(
       setConfirmedGroups: (confirmedGroups) => { set({ confirmedGroups }); void get().persistDraft(); },
       setGroupAssign: (groupAssign) => { set({ groupAssign }); void get().persistDraft(); },
       setMeetingDetails: (patch) => { set(patch); void get().persistDraft(); },
+      setLaunchMode: (launchMode) => { set({ launchMode }); void get().persistDraft(); },
       setRightCollapsed: (rightCollapsed) => set({ rightCollapsed }),
 
       seed: (data, options) => {
@@ -385,7 +396,17 @@ export const useWizardStore = create<WizardStore>()(
               const localStep = Number(local.stepIdx ?? 0);
               const remoteStep = Number(remote.stepIdx ?? 0);
               if (remoteStep >= localStep) {
-                get().applyPayload(remote, { skipPersist: true });
+                const merged: WizardPayload = {
+                  ...remote,
+                  launchMode: local.launchMode ?? remote.launchMode,
+                  meetingTitle: local.meetingTitle ?? remote.meetingTitle,
+                  meetingDate: local.meetingDate ?? remote.meetingDate,
+                  meetingStart: local.meetingStart ?? remote.meetingStart,
+                  meetingEnd: local.meetingEnd ?? remote.meetingEnd,
+                  meetingPlatform: local.meetingPlatform ?? remote.meetingPlatform,
+                  meetingLink: local.meetingLink ?? remote.meetingLink,
+                };
+                get().applyPayload(merged, { skipPersist: true });
               } else {
                 await saveWizardDraft(supabase, user.id, local);
               }

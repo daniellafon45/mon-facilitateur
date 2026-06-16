@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -32,8 +31,7 @@ export default function PilotagePage() {
   }, [store]);
 
   return (
-    <DashboardShell>
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Centre de pilotage</h1>
           <p className="text-muted-foreground mt-1">Vue d&apos;ensemble de votre activité de facilitation</p>
@@ -79,6 +77,5 @@ export default function PilotagePage() {
           </CardContent>
         </Card>
       </div>
-    </DashboardShell>
   );
 }

@@ -16,6 +16,8 @@ interface WizardMethodCardProps {
   insight: MethodRecommendationInsight;
   selected: boolean;
   onToggle: () => void;
+  featured?: boolean;
+  durationLabel?: string;
 }
 
 export function WizardMethodCard({
@@ -24,8 +26,16 @@ export function WizardMethodCard({
   insight,
   selected,
   onToggle,
+  featured = false,
+  durationLabel,
 }: WizardMethodCardProps) {
   const [isHovered, setIsHovered] = React.useState(false);
+  const [imgSrc, setImgSrc] = React.useState(() => getMethodIllustration(method.id, method.cats[0]));
+  const fallbackSrc = getMethodIllustration(method.id, method.cats[0]);
+
+  React.useEffect(() => {
+    setImgSrc(getMethodIllustration(method.id, method.cats[0]));
+  }, [method.id, method.cats]);
 
   const detailVariants = {
     hidden: { opacity: 0, height: 0, marginTop: 0 },
@@ -60,6 +70,7 @@ export function WizardMethodCard({
         }}
         className={cn(
           "relative h-full cursor-pointer overflow-hidden rounded-xl border-2 transition-all duration-200",
+          featured && !selected && "border-primary/30 ring-2 ring-primary/10",
           selected
             ? "border-primary bg-primary/[0.07] ring-4 ring-primary/20"
             : "border-border/80 bg-card shadow-sm hover:border-primary/35 hover:shadow-md",
@@ -74,15 +85,18 @@ export function WizardMethodCard({
           </div>
         )}
 
-        <div className="relative h-28 w-full sm:h-32">
+        <div className={cn("relative w-full", featured ? "h-36 sm:h-40" : "h-28 sm:h-32")}>
           <img
-            src={getMethodIllustration(method.id, method.cats[0])}
+            src={imgSrc}
             alt=""
             className={cn(
               "h-full w-full object-cover transition-opacity duration-200",
               selected && "opacity-90",
             )}
             loading="lazy"
+            onError={() => {
+              if (imgSrc !== fallbackSrc) setImgSrc(fallbackSrc);
+            }}
           />
           <div
             className={cn(
@@ -118,38 +132,53 @@ export function WizardMethodCard({
             </div>
             <h3
               className={cn(
-                "mt-1 line-clamp-2 text-sm font-semibold leading-snug sm:text-base",
+                "mt-1 line-clamp-2 font-semibold leading-snug",
+                featured ? "text-base sm:text-lg" : "text-sm sm:text-base",
                 selected ? "text-primary" : "text-card-foreground",
               )}
             >
               {method.title}
             </h3>
+            {featured && (
+              <p className="mt-1 text-sm font-semibold text-primary">{method.tagline}</p>
+            )}
           </div>
 
-          <AnimatePresence>
-            {isHovered && (
-              <motion.div
-                key="details"
-                initial="hidden"
-                animate="visible"
-                exit="hidden"
-                variants={detailVariants}
-                className="overflow-hidden"
-              >
-                <p
-                  className={cn(
-                    "text-xs font-semibold",
-                    insight.recommended ? "text-emerald-600" : "text-muted-foreground",
-                  )}
+          {featured ? (
+            <div className="mt-2">
+              <p className="text-sm text-muted-foreground">{method.why || method.tagline}</p>
+              {durationLabel && (
+                <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                  Durée indicative · {durationLabel}
+                </p>
+              )}
+            </div>
+          ) : (
+            <AnimatePresence>
+              {isHovered && (
+                <motion.div
+                  key="details"
+                  initial="hidden"
+                  animate="visible"
+                  exit="hidden"
+                  variants={detailVariants}
+                  className="overflow-hidden"
                 >
-                  {insight.headline}
-                </p>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  {insight.justification}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <p
+                    className={cn(
+                      "text-xs font-semibold",
+                      insight.recommended ? "text-emerald-600" : "text-muted-foreground",
+                    )}
+                  >
+                    {insight.headline}
+                  </p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {insight.justification}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
         </div>
       </Card>
     </motion.div>

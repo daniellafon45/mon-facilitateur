@@ -19,6 +19,7 @@ export interface LaunchedSession {
   objective?: string;
   genre?: string | null;
   simulating?: boolean;
+  durationMin?: number;
 }
 
 /**
@@ -43,6 +44,7 @@ export function useLaunchedSession(fallbackMode: SessionMode): LaunchedSession {
         objective: activeSession.objective,
         genre: activeSession.genre,
         simulating: activeSession.simulating,
+        durationMin: activeSession.durationMin,
       };
     }
 

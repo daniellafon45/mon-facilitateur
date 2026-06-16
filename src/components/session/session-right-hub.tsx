@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
   Bolt,
   Calendar,
   ChevronDown,
-  ChevronLeft,
   Clock,
-  Download,
-  Expand,
   Eye,
   FileText,
   Grid3X3,
-  Link2,
   List,
   MessageSquare,
-  Pencil,
-  SlidersHorizontal,
   Sparkles,
   StopCircle,
   Target,
@@ -26,19 +21,21 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  FACILITATOR_TIPS,
   PERSONAL_TOOLS,
   PROJECT_TOOLS,
   QUICK_TOOLS,
   SESSION_RAIL_ITEMS,
   type SessionRailId,
 } from "@/lib/session/session-rail-config";
+import type { SessionAssistContext } from "@/lib/session/build-session-assist-context";
+import { SessionLiveAssistance } from "@/components/session/session-live-assistance";
 import { METHOD_BY_ID } from "@/lib/methods/catalog";
+import { useDocumentsStore } from "@/lib/store/documents-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const RAIL_ICONS: Record<string, LucideIcon> = {
-  Pencil,
+  Pencil: Grid3X3,
   Grid: Grid3X3,
   Calendar,
   Users,
@@ -52,26 +49,53 @@ const RAIL_ICONS: Record<string, LucideIcon> = {
 interface SessionRightHubProps {
   methodIds: string[];
   activeMethodId: string;
+  projectId?: string;
+  durationMin?: number;
   onSelectMethod: (id: string) => void;
   onOpenQuickTool: (id: string) => void;
+  onOpenProjectTool: (methodId: string) => void;
+  onOpenDocuments?: () => void;
   onPreviewFullscreen?: () => void;
   previewFullscreen?: boolean;
+  assistContext: SessionAssistContext;
+  onOpenAmaris?: () => void;
 }
 
 export function SessionRightHub({
   methodIds,
   activeMethodId,
+  projectId,
+  durationMin = 60,
   onSelectMethod,
   onOpenQuickTool,
+  onOpenProjectTool,
+  onOpenDocuments,
   onPreviewFullscreen,
   previewFullscreen,
+  assistContext,
+  onOpenAmaris,
 }: SessionRightHubProps) {
   const [derouleOpen, setDerouleOpen] = useState(true);
-  const [persoOpen, setPersoOpen] = useState(false);
-  const [tipsOpen, setTipsOpen] = useState(false);
+  const [persoOpen, setPersoOpen] = useState(true);
   const [docsOpen, setDocsOpen] = useState(false);
-  const [sessSecs, setSessSecs] = useState(60 * 60);
+  const [sessSecs, setSessSecs] = useState(() => Math.max(60, durationMin * 60));
   const [sessUp, setSessUp] = useState(false);
+
+  const allDocs = useDocumentsStore((s) => s.docs);
+
+  const docs = useMemo(
+    () =>
+      allDocs.filter(
+        (d) =>
+          !d.trashed &&
+          (!projectId || d.projectId === projectId || d.projectId === null),
+      ),
+    [allDocs, projectId],
+  );
+
+  useEffect(() => {
+    setSessSecs(Math.max(60, durationMin * 60));
+  }, [durationMin]);
 
   useEffect(() => {
     const t = window.setInterval(() => setSessSecs((s) => Math.max(0, s - 1)), 1000);
@@ -79,10 +103,12 @@ export function SessionRightHub({
   }, []);
 
   const activeMeta = METHOD_BY_ID[activeMethodId];
-  const elapsed = 60 * 60 - sessSecs;
+  const elapsed = Math.max(0, durationMin * 60 - sessSecs);
   const shown = sessUp ? elapsed : sessSecs;
   const fmt = (s: number) =>
     `${String(Math.floor(Math.abs(s) / 60)).padStart(2, "0")}:${String(Math.abs(s) % 60).padStart(2, "0")}`;
+
+  const linkedDocs = docs.slice(0, 6);
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-3 text-sm">
@@ -102,7 +128,7 @@ export function SessionRightHub({
         <button
           type="button"
           onClick={() => setSessUp((u) => !u)}
-          className="flex w-full items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2 text-left"
+          className="flex w-full items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2 text-left transition-colors hover:border-primary/40"
         >
           <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-primary/30 text-sm font-extrabold tabular-nums">
             {fmt(shown)}
@@ -177,16 +203,15 @@ export function SessionRightHub({
         {persoOpen && (
           <div className="space-y-1">
             {PERSONAL_TOOLS.map((t) => (
-              <a
+              <button
                 key={t.id}
-                href={t.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold hover:bg-muted/50"
+                type="button"
+                onClick={() => window.open(t.url, "_blank", "noopener,noreferrer")}
+                className="flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-bold transition-colors hover:border-primary hover:bg-primary/5"
               >
                 <span className="flex-1">{t.label}</span>
                 <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -199,8 +224,11 @@ export function SessionRightHub({
             <button
               key={q.id}
               type="button"
-              onClick={() => onOpenQuickTool(q.id)}
-              className="flex flex-col items-start gap-1 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold hover:border-primary hover:bg-primary/5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenQuickTool(q.id);
+              }}
+              className="flex flex-col items-start gap-1 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold transition-colors hover:border-primary hover:bg-primary/5 active:scale-[0.98]"
             >
               <QuickIcon id={q.id} />
               {q.label}
@@ -216,7 +244,12 @@ export function SessionRightHub({
             <button
               key={t.id}
               type="button"
-              className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold text-muted-foreground hover:border-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenProjectTool(t.methodId);
+              }}
+              className="rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-foreground active:scale-[0.98]"
+              data-testid={`project-tool-${t.id}`}
             >
               {t.label}
             </button>
@@ -224,26 +257,7 @@ export function SessionRightHub({
         </div>
       </div>
 
-      <div className="border-t pt-3">
-        <button
-          type="button"
-          className="mb-2 flex w-full items-center gap-2 text-xs font-extrabold"
-          onClick={() => setTipsOpen((o) => !o)}
-        >
-          <span className="flex-1 text-left">Assistance</span>
-          <ChevronDown className={cn("h-3.5 w-3.5", !tipsOpen && "-rotate-90")} />
-        </button>
-        {tipsOpen &&
-          FACILITATOR_TIPS.map((t, i) => (
-            <div key={i} className="mb-2 flex gap-2 text-xs">
-              <Sparkles className="h-4 w-4 shrink-0" style={{ color: t.color }} />
-              <div>
-                <p className="font-bold">{t.title}</p>
-                <p className="text-muted-foreground">{t.desc}</p>
-              </div>
-            </div>
-          ))}
-      </div>
+      <SessionLiveAssistance context={assistContext} onOpenAmaris={onOpenAmaris} />
 
       <div>
         <button
@@ -254,13 +268,33 @@ export function SessionRightHub({
           <span className="flex-1 text-left">Documents liés</span>
           <ChevronDown className={cn("h-3.5 w-3.5", !docsOpen && "-rotate-90")} />
         </button>
-        {docsOpen &&
-          ["Étude de besoins.pdf", "Benchmark.xlsx"].map((d) => (
-            <div key={d} className="mb-1 flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">
-              <FileText className="h-3.5 w-3.5" />
-              {d}
-            </div>
-          ))}
+        {docsOpen && (
+          <div className="space-y-1">
+            {linkedDocs.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Aucun document pour ce projet.</p>
+            ) : (
+              linkedDocs.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/dashboard/documents?doc=${d.id}`}
+                  className="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-semibold hover:bg-muted/50"
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{d.name}</span>
+                </Link>
+              ))
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-1 h-7 w-full text-xs"
+              onClick={onOpenDocuments ?? (() => window.open("/dashboard/documents", "_self"))}
+            >
+              Voir tous les documents
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -76,6 +76,16 @@ export async function finishWizard({
     sub: universe?.title,
   });
 
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.setItem("mf-wizard-skip-draft", "1");
+  }
+
+  if (launchMode === "schedule") {
+    router.push("/dashboard/rencontres");
+    void wizard.deleteDraft();
+    return;
+  }
+
   facilitation.launchSession({
     mode,
     objective,
@@ -89,11 +99,11 @@ export async function finishWizard({
     durationMin: totalMin,
   });
 
-  await wizard.deleteDraft();
-
   if (launchMode === "simulate" || mode !== "solo") {
     router.push(`/dashboard/session?project=${project.id}`);
   } else {
     router.push("/dashboard/session/solo");
   }
+
+  void wizard.deleteDraft();
 }

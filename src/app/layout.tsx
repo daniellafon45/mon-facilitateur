@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { RouteTransitionProvider } from "@/components/providers/route-transition-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -57,7 +58,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-full flex flex-col overflow-x-hidden">{children}</body>
+      <body className="min-h-full flex flex-col overflow-x-hidden">
+        <RouteTransitionProvider>{children}</RouteTransitionProvider>
+      </body>
     </html>
   );
 }

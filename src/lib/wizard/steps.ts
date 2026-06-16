@@ -33,20 +33,6 @@ export function getStepPath(mode: SessionMode | null): string[] {
   return [...common, "e4", "e7"];
 }
 
-/** Parcours complet affiché dans le stepper (toujours 7 pastilles, comme la maquette). */
-export function getHeaderStepPath(mode: SessionMode | null): string[] {
-  const common = [...WIZARD_COMMON_KEYS];
-  if (mode === "solo") return [...common, "s4", "e7"];
-  if (mode === "equipe" || mode === "atelier") return [...common, "e4", "e7"];
-  return [...common, "branch", "e7"];
-}
-
-export function getHeaderStepLabels(mode: SessionMode | null): string[] {
-  return getHeaderStepPath(mode).map((k) =>
-    k === "branch" ? "Équipe ou ambiance" : (STEP_LABELS[k] ?? "Étape"),
-  );
-}
-
 export function getStepRoute(stepKey: string): string {
   return `/dashboard/wizard/${STEP_KEYS[stepKey] ?? stepKey}`;
 }

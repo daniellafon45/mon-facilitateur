@@ -14,7 +14,6 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { IntegrationLogo, providerMatchesSearch } from "@/components/integrations/integration-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,7 +163,7 @@ export function IntegrationsView({ initialItems, connectedCount }: IntegrationsV
   ];
 
   return (
-    <DashboardShell>
+    <>
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1 space-y-6 pb-12">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -383,6 +382,6 @@ export function IntegrationsView({ initialItems, connectedCount }: IntegrationsV
           {toast}
         </div>
       ) : null}
-    </DashboardShell>
+    </>
   );
 }

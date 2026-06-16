@@ -2,12 +2,13 @@ import type { SessionState } from "@/components/session/methods/column-workspace
 import { METHOD_CONFIGS } from "@/components/session/methods/configs";
 import { METHOD_BY_ID } from "@/lib/methods/catalog";
 import { buildMethodExportText } from "@/lib/methods/method-workspace-helpers";
-import { captureDurationLabel, type SessionCaptureState } from "@/lib/session/session-capture";
+import { captureDurationLabel, captureTimeLabel, type SessionCaptureState } from "@/lib/session/session-capture";
 import type {
   Meeting,
   MeetingAgendaTiming,
   MeetingDetailSnapshot,
   MeetingMethodResult,
+  MeetingNoteEntry,
   MeetingReport,
   SessionMode,
 } from "@/types/facilitation";
@@ -114,6 +115,27 @@ export function buildMeetingSnapshot(input: BuildSnapshotInput): MeetingDetailSn
     : `MF-${dateISO.replace(/-/g, "")}-${Date.now().toString().slice(-4)}`;
 
   const methods = buildMethodResults(methodIds, methodStates);
+
+  const extraNotes: MeetingNoteEntry[] = [];
+  if (capture.privateNotes.trim()) {
+    extraNotes.push({
+      author: "Vous",
+      time: captureTimeLabel(capture.endedAt),
+      vis: "prive",
+      text: capture.privateNotes.trim(),
+    });
+  }
+  for (const msg of capture.discussion) {
+    extraNotes.push({
+      author: msg.author,
+      time: msg.time,
+      vis: "public",
+      text: `[Discussion] ${msg.text}`,
+    });
+  }
+
+  const allNotes = [...capture.notes, ...extraNotes];
+
   const report: MeetingReport = {
     scribe: reportDraft?.scribe ?? "Scribe",
     scribeRole: reportDraft?.scribeRole ?? "Scribe",
@@ -135,7 +157,7 @@ export function buildMeetingSnapshot(input: BuildSnapshotInput): MeetingDetailSn
     journal: [],
     methods,
     projTools: [],
-    notes: capture.notes,
+    notes: allNotes,
     votes: capture.votes,
     quickLog: capture.quickLog,
     tasks: [],

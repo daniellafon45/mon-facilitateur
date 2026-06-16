@@ -32,8 +32,9 @@ export function WhiteboardPage() {
   const hydrateProjects = useFacilitationStore((s) => s.hydrateFromSupabase);
   const projectsHydrated = useFacilitationStore((s) => s.hydrated);
 
-  const current = useWhiteboardStore((s) =>
-    s.currentId ? s.boards.find((b) => b.id === s.currentId) ?? null : null,
+  const current = useMemo(
+    () => (currentId ? boards.find((b) => b.id === currentId) ?? null : null),
+    [boards, currentId],
   );
 
   useEffect(() => {

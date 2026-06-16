@@ -1,7 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { exportBoardImageBase64 } from "@/lib/whiteboard/export-board-image";
 import {
   CheckCircle,
   FileText,
@@ -69,19 +70,29 @@ interface WhiteboardBoardProps {
   /** Notifie l’overlay parent (ex. modale méthode) qu’un sous-dialog est ouvert. */
   onSubdialogOpenChange?: (open: boolean) => void;
   onElementsChange?: (elements: WbElement[], view: ViewState) => void;
+  /** Appelé quand l’édition d’une note/texte se termine (blur) — utile pour flush debounce parent. */
+  onEditingBlur?: () => void;
 }
 
-export function WhiteboardBoard({
-  className,
-  height = 540,
-  boardId = null,
-  boardName,
-  initialElements = [],
-  initialView = { tx: 0, ty: 0, k: 1 },
-  onSave,
-  onSubdialogOpenChange,
-  onElementsChange,
-}: WhiteboardBoardProps) {
+export type WhiteboardBoardHandle = {
+  exportImage: () => Promise<string | null>;
+};
+
+export const WhiteboardBoard = forwardRef<WhiteboardBoardHandle, WhiteboardBoardProps>(function WhiteboardBoard(
+  {
+    className,
+    height = 540,
+    boardId = null,
+    boardName,
+    initialElements = [],
+    initialView = { tx: 0, ty: 0, k: 1 },
+    onSave,
+    onSubdialogOpenChange,
+    onElementsChange,
+    onEditingBlur,
+  },
+  ref,
+) {
   const [els, setEls] = useState<WbElement[]>(initialElements);
   const [saveToast, setSaveToast] = useState("");
   const [tool, setTool] = useState<WhiteboardTool>("select");
@@ -101,6 +112,14 @@ export function WhiteboardBoard({
   const opRef = useRef<OpState | null>(null);
   const draftRef = useRef<WbElement | null>(null);
   const viewRef = useRef(view);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportImage: () => exportBoardImageBase64(els),
+    }),
+    [els],
+  );
 
   useEffect(() => {
     setTplMounted(true);
@@ -340,6 +359,7 @@ export function WhiteboardBoard({
   };
 
   const elDown = (e: React.PointerEvent, el: WbElement) => {
+    if ((e.target as HTMLElement).closest("textarea")) return;
     if (tool === "eraser") {
       e.stopPropagation();
       del(el.id);
@@ -647,9 +667,11 @@ export function WhiteboardBoard({
                       left: el.x,
                       top: el.y,
                       width: el.w,
-                      minHeight: el.h,
+                      height: el.h,
+                      boxSizing: "border-box",
                       background: col.bg,
-                      border: isSel ? "2px solid #2563eb" : `1px solid ${col.bd}`,
+                      border: `1px solid ${col.bd}`,
+                      outline: isSel ? "2px solid #2563eb" : "none",
                       pointerEvents: childPE,
                       cursor:
                         tool === "select" ? "move" : tool === "eraser" ? "cell" : "default",
@@ -661,9 +683,17 @@ export function WhiteboardBoard({
                       onPointerDown={(e) => {
                         if (tool === "select") e.stopPropagation();
                       }}
+                      onFocus={() => {
+                        setEditing(el.id);
+                        setSel(el.id);
+                      }}
+                      onBlur={() => {
+                        setEditing(null);
+                        onEditingBlur?.();
+                      }}
                       onChange={(e) => upd(el.id, { text: e.target.value })}
                       placeholder="Écrire…"
-                      className="min-h-[54px] flex-1 resize-none border-0 bg-transparent text-xs font-semibold leading-snug outline-none"
+                      className="h-full w-full resize-none overflow-y-auto border-0 bg-transparent text-xs font-semibold leading-snug outline-none"
                       style={{ color: col.fg }}
                     />
                   </div>
@@ -688,6 +718,14 @@ export function WhiteboardBoard({
                     autoFocus={editing === el.id}
                     onPointerDown={(e) => {
                       if (tool === "select") e.stopPropagation();
+                    }}
+                    onFocus={() => {
+                      setEditing(el.id);
+                      setSel(el.id);
+                    }}
+                    onBlur={() => {
+                      setEditing(null);
+                      onEditingBlur?.();
                     }}
                     onChange={(e) => upd(el.id, { text: e.target.value })}
                     placeholder="Texte…"
@@ -1026,4 +1064,4 @@ export function WhiteboardBoard({
         )}
     </>
   );
-}
+});

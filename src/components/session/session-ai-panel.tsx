@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,26 +15,19 @@ interface ChatMsg {
 interface SessionAiPanelProps {
   open: boolean;
   methodTitle: string;
+  objective?: string;
   onClose: () => void;
 }
 
-function mockReply(question: string, method: string): string {
-  const q = question.toLowerCase();
-  if (/silencieux|participant/.test(q)) {
-    return "Invitez la personne par son prénom avec une question fermée, puis élargissez. Ex. : « Marie, qu'est-ce qui vous semble le plus important dans ce bloc ? »";
-  }
-  if (/résume|synthèse|idées/.test(q)) {
-    return `Voici une synthèse rapide pour ${method} : listez 2–3 idées fortes par bloc, puis cherchez les incohérences entre proposition de valeur et segments.`;
-  }
-  if (/prochaine|étape|suite/.test(q)) {
-    return `Prochaine étape suggérée : compléter les blocs vides (coûts et revenus), puis faire un dot voting sur les hypothèses à valider.`;
-  }
-  return `Pour ${method}, gardez le rythme : une question à la fois, notez sans juger, et validez la cohérence entre les 9 blocs avant de conclure.`;
-}
-
-export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelProps) {
+export function SessionAiPanel({ open, methodTitle, objective, onClose }: SessionAiPanelProps) {
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [val, setVal] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -48,10 +42,11 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
     if (open) {
       setMsgs([]);
       setVal("");
+      setBusy(false);
     }
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const suggestions = [
     "Relance le groupe avec une question ouverte",
@@ -60,18 +55,49 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
     "Comment gérer un participant silencieux ?",
   ];
 
-  function ask(q: string) {
-    setMsgs((m) => [
-      ...m,
-      { role: "user", text: q },
-      { role: "ai", text: mockReply(q, methodTitle) },
-    ]);
+  async function ask(q: string) {
+    const question = q.trim();
+    if (!question || busy) return;
+    setBusy(true);
+    setMsgs((m) => [...m, { role: "user", text: question }]);
     setVal("");
+
+    const prompt =
+      `Tu es Amaris, assistant de facilitation. Méthode en cours : "${methodTitle}".` +
+      (objective ? ` Objectif de séance : "${objective}".` : "") +
+      ` Question du facilitateur : "${question}". Réponds en français, 2-4 phrases, concrètes et actionnables.`;
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }],
+          channel: "session-assist",
+        }),
+      });
+      const data = await res.json();
+      const reply =
+        typeof data.reply === "string" && data.reply.trim()
+          ? data.reply.trim()
+          : "Gardez le rythme : une question à la fois, notez sans juger, puis validez avant de passer à l'étape suivante.";
+      setMsgs((m) => [...m, { role: "ai", text: reply }]);
+    } catch {
+      setMsgs((m) => [
+        ...m,
+        {
+          role: "ai",
+          text: `Pour ${methodTitle}, structurez la prochaine intervention en une question claire, puis laissez 2 minutes de réflexion silencieuse avant le débat.`,
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[1700] flex justify-end bg-slate-900/35"
+      className="fixed inset-0 z-[2600] flex justify-end bg-slate-900/35"
       onClick={onClose}
     >
       <div
@@ -96,8 +122,8 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
         <div className="flex-1 overflow-y-auto p-4">
           {msgs.length === 0 ? (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Je vous accompagne pendant la séance — relances, suggestions, aide sur la méthode. L&apos;outil principal n&apos;est pas modifié.
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Je vous accompagne pendant la séance — relances, suggestions, aide sur la méthode.
               </p>
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Suggestions
@@ -106,8 +132,9 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
                 <button
                   key={s}
                   type="button"
-                  onClick={() => ask(s)}
-                  className="flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold hover:border-primary hover:bg-primary/5"
+                  disabled={busy}
+                  onClick={() => void ask(s)}
+                  className="flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold hover:border-primary hover:bg-primary/5 disabled:opacity-50"
                 >
                   <Sparkles className="h-4 w-4 shrink-0 text-primary" />
                   {s}
@@ -129,6 +156,9 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
                   {m.text}
                 </div>
               ))}
+              {busy && (
+                <p className="text-xs text-muted-foreground">Amaris réfléchit…</p>
+              )}
             </div>
           )}
         </div>
@@ -137,21 +167,23 @@ export function SessionAiPanel({ open, methodTitle, onClose }: SessionAiPanelPro
           <Input
             value={val}
             onChange={(e) => setVal(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && val.trim() && ask(val.trim())}
+            onKeyDown={(e) => e.key === "Enter" && val.trim() && void ask(val)}
             placeholder="Posez votre question…"
             className="rounded-xl"
+            disabled={busy}
           />
           <Button
             type="button"
             size="icon"
             className="shrink-0 rounded-xl"
-            disabled={!val.trim()}
-            onClick={() => val.trim() && ask(val.trim())}
+            disabled={!val.trim() || busy}
+            onClick={() => void ask(val)}
           >
             <Send className="h-4 w-4" />
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

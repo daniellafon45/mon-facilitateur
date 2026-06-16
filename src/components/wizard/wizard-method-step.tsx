@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Pencil, Plus, Sparkles, Target, X } from "lucide-react";
+import { Check, ChevronDown, LayoutGrid, Pencil, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { WizardAmarisButton } from "@/components/wizard/wizard-amaris-button";
+import { AssistantAvatar } from "@/components/ui/assistant-avatar";
 import {
   ALL_METHODS,
   METHOD_BY_ID,
   METHOD_TABS,
   recommendMethod,
 } from "@/lib/methods/catalog";
-import { getMethodRecommendationInsight } from "@/lib/methods/method-recommendation";
-import { MethodIcon } from "@/components/modeles/method-icon";
-import { WizardMethodCard } from "@/components/wizard/wizard-method-card";
-import { getMethodCategoryLabel } from "@/lib/methods/method-recommendation";
+import {
+  getMethodCategoryLabel,
+  getMethodRecommendationInsight,
+} from "@/lib/methods/method-recommendation";
 import { GENRE_BY_ID } from "@/lib/methods/session-genres";
+import { WizardAmarisButton } from "@/components/wizard/wizard-amaris-button";
+import { WizardMethodCard } from "@/components/wizard/wizard-method-card";
 
 function buildSequence(mainId: string, altIds: string[], targetMin: number): string[] {
   const seq = [mainId];
@@ -34,24 +37,31 @@ function buildSequence(mainId: string, altIds: string[], targetMin: number): str
 
 export function WizardMethodStep({
   objective,
+  ptype,
   genreId,
   genreMin,
   methods,
   methodsManual,
+  methodsAiSummary,
   onObjectiveChange,
   onMethodsChange,
 }: {
   objective: string;
+  ptype: string | null;
   genreId: string | null;
   genreMin: number;
   methods: string[];
   methodsManual: boolean;
+  methodsAiSummary?: string | null;
   onObjectiveChange: (v: string) => void;
   onMethodsChange: (ids: string[], manual?: boolean) => void;
 }) {
   const genre = genreId ? GENRE_BY_ID[genreId] : null;
   const genreCat = genre?.cats[0] ?? "ideas";
-  const reco = useMemo(() => recommendMethod(genreCat, objective), [genreCat, objective]);
+  const reco = useMemo(
+    () => recommendMethod(genreCat, objective, { ptype, genreId }),
+    [genreCat, objective, ptype, genreId],
+  );
   const targetMin = genreMin || genre?.idealMin || 75;
   const recoSeq = useMemo(
     () => buildSequence(reco.main, reco.alts, targetMin),
@@ -65,6 +75,7 @@ export function WizardMethodStep({
 
   useEffect(() => {
     if (methodsManual) return;
+    if (methodsAiSummary && methods.length > 0) return;
     const key = recoSeq.join(",");
     const cur = methods;
     const last = lastAutoRef.current;
@@ -73,35 +84,52 @@ export function WizardMethodStep({
       onMethodsChange(recoSeq, false);
       lastAutoRef.current = key;
     }
-  }, [recoSeq, methodsManual, methods, onMethodsChange]);
+  }, [recoSeq, methodsManual, methods, methodsAiSummary, onMethodsChange]);
 
   const mainM = METHOD_BY_ID[reco.main];
   const altMethods = reco.alts.map((id) => METHOD_BY_ID[id]).filter(Boolean);
   const libMethods = ALL_METHODS.filter((m) => tab === "all" || m.cats.includes(tab));
-  const seqTotal = methods.reduce((s, id) => s + (METHOD_BY_ID[id]?.est ?? 0), 0);
-
   const toggle = (id: string) => {
     const next = methods.includes(id) ? methods.filter((x) => x !== id) : [...methods, id];
     onMethodsChange(next, true);
   };
 
+  const applyAmarisRecommendation = () => {
+    onMethodsChange(recoSeq, false);
+    lastAutoRef.current = recoSeq.join(",");
+  };
+
   return (
-    <div className="mx-auto max-w-[980px] space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-          Choisis ta méthode et tes outils
-        </h1>
+    <div className="mx-auto max-w-[980px] space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            Choisis ta méthode et tes outils
+          </h1>
+          <div className="mt-3 h-[3px] w-14 rounded-full bg-primary" />
+        </div>
         <WizardAmarisButton
+          className="self-start"
           label="Laisser Amaris recommander la séquence"
-          onClick={() => {
-            onMethodsChange(recoSeq, false);
-            lastAutoRef.current = recoSeq.join(",");
-          }}
+          onClick={applyAmarisRecommendation}
         />
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border bg-slate-50 px-4 py-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+      {methodsAiSummary && !methodsManual && methods.length > 0 && (
+        <div
+          className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground"
+          data-testid="wizard-ai-methods-banner"
+        >
+          <AssistantAvatar sizeClassName="mt-0.5 h-5 w-5 shrink-0" />
+          <p>
+            <span className="font-semibold text-primary">Sélection proposée par Amaris</span> d&apos;après votre
+            objectif — {methodsAiSummary}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Target className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -117,98 +145,80 @@ export function WizardMethodStep({
               autoFocus
             />
           ) : (
-            <p className="truncate font-semibold">{objective || "—"}</p>
+            <p className="font-semibold leading-snug">{objective || "—"}</p>
           )}
         </div>
-        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingObj(true)}>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => setEditingObj(true)}
+          aria-label="Modifier l'objectif"
+        >
           <Pencil className="h-4 w-4" />
         </button>
       </div>
 
       {mainM && (
-        <div className="rounded-2xl border-2 border-violet-300 bg-violet-50/50 p-4 sm:p-5">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-violet-700">
-            <Sparkles className="h-3 w-3" />
+        <section className="space-y-3">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-primary">
+            <AssistantAvatar sizeClassName="h-4 w-4" />
             Recommandé par Amaris
           </div>
-          <div className="flex flex-wrap gap-4">
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600"
-            >
-              <MethodIcon name={mainM.icon} className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-extrabold">{mainM.title}</h3>
-              <p className="text-sm font-semibold text-violet-700">{mainM.tagline}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{mainM.why || mainM.tagline}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-xs font-semibold">
-                  <Check className="h-3 w-3 text-emerald-500" />
-                  Tient dans {genre?.dur ?? `${targetMin} min`}
-                </span>
-                {mainM.produces && (
-                  <span className="inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-1 text-xs font-semibold">
-                    <Check className="h-3 w-3 text-emerald-500" />
-                    {mainM.produces}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant={methods.includes(mainM.id) ? "default" : "outline"}
-            size="sm"
-            className="mt-4 rounded-xl"
-            onClick={() => toggle(mainM.id)}
-          >
-            {methods.includes(mainM.id) ? (
-              <><Check className="mr-1 h-4 w-4" /> Dans votre rencontre</>
-            ) : (
-              <><Plus className="mr-1 h-4 w-4" /> Ajouter à la rencontre</>
+          <WizardMethodCard
+            method={mainM}
+            categoryLabel={getMethodCategoryLabel(mainM)}
+            insight={getMethodRecommendationInsight(mainM.id, objective, reco, genreCat)}
+            selected={methods.includes(mainM.id)}
+            onToggle={() => toggle(mainM.id)}
+            featured
+            durationLabel={genre?.dur ?? `${targetMin} min`}
+          />
+          <div className="flex flex-wrap gap-2 pl-1">
+            <Badge variant="outline" className="gap-1 rounded-full border-border bg-background font-semibold">
+              <Check className="h-3 w-3 text-emerald-500" />
+              Tient dans {genre?.dur ?? `${targetMin} min`}
+            </Badge>
+            {mainM.produces && (
+              <Badge variant="outline" className="gap-1 rounded-full border-border bg-background font-semibold">
+                <Check className="h-3 w-3 text-emerald-500" />
+                {mainM.produces}
+              </Badge>
             )}
-          </Button>
-        </div>
+          </div>
+        </section>
       )}
 
       {altMethods.length > 0 && (
-        <div>
+        <section>
           <p className="mb-3 text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
             Aussi pertinentes pour votre objectif
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {altMethods.map((m) => (
-              <button
+              <WizardMethodCard
                 key={m.id}
-                type="button"
-                onClick={() => toggle(m.id)}
-                className="flex items-start gap-3 rounded-xl border bg-background p-4 text-left hover:border-primary/30"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-                  <MethodIcon name={m.icon} className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-extrabold">{m.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{m.why || m.tagline}</p>
-                </div>
-                <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
+                method={m}
+                categoryLabel={getMethodCategoryLabel(m)}
+                insight={getMethodRecommendationInsight(m.id, objective, reco, genreCat)}
+                selected={methods.includes(m.id)}
+                onToggle={() => toggle(m.id)}
+              />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       <button
         type="button"
         onClick={() => setLibOpen((o) => !o)}
-        className="flex w-full items-center gap-3 rounded-xl border bg-background px-4 py-3 text-left"
+        className="flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/30"
       >
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-          <MethodIcon name="Grid" className="h-4 w-4" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <LayoutGrid className="h-4 w-4" />
         </div>
         <span className="font-extrabold">Toute la bibliothèque</span>
         <span className="text-sm text-muted-foreground">· {ALL_METHODS.length} méthodes</span>
-        <ChevronDown className={cn("ml-auto h-4 w-4 transition-transform", libOpen && "rotate-180")} />
+        <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", libOpen && "rotate-180")} />
       </button>
 
       {libOpen && (
@@ -220,15 +230,17 @@ export function WizardMethodStep({
                 type="button"
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold",
-                  tab === t.id ? "border-foreground bg-foreground text-background" : "text-muted-foreground",
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  tab === t.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/40",
                 )}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          <div className="grid max-h-[400px] grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid max-h-[400px] grid-cols-1 gap-4 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
             {libMethods.map((m) => {
               const sel = methods.includes(m.id);
               const insight = getMethodRecommendationInsight(m.id, objective, reco, genreCat);
@@ -247,20 +259,6 @@ export function WizardMethodStep({
         </div>
       )}
 
-      <div className="fixed bottom-[72px] left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur md:left-[17rem]">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
-          <span className="text-sm font-bold">{methods.length} méthode{methods.length > 1 ? "s" : ""}</span>
-          <span className="text-sm text-muted-foreground">· ~ {Math.round(seqTotal / 5) * 5 || targetMin} min</span>
-          <div className="flex flex-1 flex-wrap gap-1.5">
-            {methods.map((id) => (
-              <span key={id} className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800">
-                {METHOD_BY_ID[id]?.title ?? id}
-                <button type="button" onClick={() => toggle(id)}><X className="h-3 w-3" /></button>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

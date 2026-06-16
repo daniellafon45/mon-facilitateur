@@ -30,12 +30,12 @@ export const QUICK_TOOLS = [
 ] as const;
 
 export const PROJECT_TOOLS = [
-  { id: "gantt", label: "Gantt" },
-  { id: "raci", label: "RACI" },
-  { id: "charte", label: "Charte d'équipe" },
-  { id: "comms", label: "Plan de comm." },
-  { id: "suppliers", label: "Fournisseurs" },
-  { id: "stakeholders", label: "Parties prenantes" },
+  { id: "gantt", label: "Gantt", methodId: "gantt-simplifie" },
+  { id: "raci", label: "RACI", methodId: "raci" },
+  { id: "charte", label: "Charte d'équipe", methodId: "charter" },
+  { id: "comms", label: "Plan de comm.", methodId: "commplan" },
+  { id: "suppliers", label: "Fournisseurs", methodId: "plan-d-action" },
+  { id: "stakeholders", label: "Parties prenantes", methodId: "analyse-des-parties-prenantes" },
 ] as const;
 
 export const FACILITATOR_TIPS = [

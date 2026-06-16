@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,63 +42,57 @@ export default function ParametresPage() {
   }
 
   if (!profile) {
-    return (
-      <DashboardShell>
-        <p className="text-muted-foreground">Chargement…</p>
-      </DashboardShell>
-    );
+    return <p className="text-muted-foreground">Chargement…</p>;
   }
 
   return (
-    <DashboardShell>
-      <div className="max-w-lg mx-auto space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>Profil</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <Label>Prénom</Label>
-                <Input
-                  className="rounded-2xl mt-1"
-                  value={profile.first_name ?? ""}
-                  onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Nom</Label>
-                <Input
-                  className="rounded-2xl mt-1"
-                  value={profile.last_name ?? ""}
-                  onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
-                />
-              </div>
-            </div>
+    <div className="max-w-lg mx-auto space-y-6">
+      <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
+      <Card className="rounded-3xl">
+        <CardHeader>
+          <CardTitle>Profil</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <Label>Rôle</Label>
+              <Label>Prénom</Label>
               <Input
                 className="rounded-2xl mt-1"
-                value={profile.role ?? ""}
-                onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+                value={profile.first_name ?? ""}
+                onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
               />
             </div>
             <div>
-              <Label>Organisation</Label>
+              <Label>Nom</Label>
               <Input
                 className="rounded-2xl mt-1"
-                value={profile.org ?? ""}
-                onChange={(e) => setProfile({ ...profile, org: e.target.value })}
+                value={profile.last_name ?? ""}
+                onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
               />
             </div>
-            <Button className="rounded-2xl w-full" onClick={save} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-            {msg && <p className="text-sm text-center text-muted-foreground">{msg}</p>}
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardShell>
+          </div>
+          <div>
+            <Label>Rôle</Label>
+            <Input
+              className="rounded-2xl mt-1"
+              value={profile.role ?? ""}
+              onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Organisation</Label>
+            <Input
+              className="rounded-2xl mt-1"
+              value={profile.org ?? ""}
+              onChange={(e) => setProfile({ ...profile, org: e.target.value })}
+            />
+          </div>
+          <Button className="rounded-2xl w-full" onClick={save} disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+          {msg && <p className="text-sm text-center text-muted-foreground">{msg}</p>}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

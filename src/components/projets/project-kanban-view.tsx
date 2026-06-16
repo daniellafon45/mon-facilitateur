@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Filter,
   LayoutGrid,
@@ -135,16 +135,17 @@ export function ProjectKanbanView({
   project: DisplayProject;
   onSwitchView?: (view: "table" | "list") => void;
 }) {
-  const ensureProject = useProjectBoardStore((s) => s.ensureProject);
-  const tasks = useProjectBoardStore((s) => s.projectTasks(project.id));
+  const allTasks = useProjectBoardStore((s) => s.tasks);
+  const tasks = useMemo(
+    () => allTasks.filter((t) => t.projectId === project.id),
+    [allTasks, project.id],
+  );
   const updateTask = useProjectBoardStore((s) => s.updateTask);
   const addKanbanTask = useProjectBoardStore((s) => s.addKanbanTask);
   const [viewTab, setViewTab] = useState<KanbanViewTab>("kanban");
   const [dragId, setDragId] = useState<string | null>(null);
   const [detailTask, setDetailTask] = useState<BoardTask | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-
-  ensureProject(project.id);
 
   const handleDrop = (colId: (typeof KANBAN_COLUMNS)[number]["id"]) => {
     if (!dragId) return;

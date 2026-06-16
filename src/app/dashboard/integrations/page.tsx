@@ -13,22 +13,6 @@ export default async function IntegrationsPage() {
   let initialItems: IntegrationItem[] = buildFallbackIntegrations();
   let connectedCount = 0;
 
-  // #region agent log
-  fetch("http://127.0.0.1:7832/ingest/7be77228-998b-4d1e-b4e0-c2eb9fd16e21", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ae2140" },
-    body: JSON.stringify({
-      sessionId: "ae2140",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "integrations/page.tsx:entry",
-      message: "IntegrationsPage server render started",
-      data: { hasUser: !!user },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   if (user) {
     try {
       const connected = await listUserIntegrations(user.id);
@@ -44,22 +28,6 @@ export default async function IntegrationsPage() {
       /* DB migration may not be applied yet */
     }
   }
-
-  // #region agent log
-  fetch("http://127.0.0.1:7832/ingest/7be77228-998b-4d1e-b4e0-c2eb9fd16e21", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ae2140" },
-    body: JSON.stringify({
-      sessionId: "ae2140",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "integrations/page.tsx:return",
-      message: "IntegrationsPage server render completed",
-      data: { itemCount: initialItems.length, connectedCount },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   return <IntegrationsPageClient initialItems={initialItems} connectedCount={connectedCount} />;
 }

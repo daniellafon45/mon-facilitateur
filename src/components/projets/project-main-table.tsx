@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -53,17 +53,22 @@ function Cell({ children, className }: { children?: React.ReactNode; className?:
 }
 
 export function ProjectMainTable({ project }: { project: DisplayProject }) {
-  const ensureProject = useProjectBoardStore((s) => s.ensureProject);
-  const groups = useProjectBoardStore((s) => s.projectGroups(project.id));
-  const tasks = useProjectBoardStore((s) => s.projectTasks(project.id));
+  const allGroups = useProjectBoardStore((s) => s.groups);
+  const allTasks = useProjectBoardStore((s) => s.tasks);
+  const groups = useMemo(
+    () => allGroups.filter((g) => g.projectId === project.id),
+    [allGroups, project.id],
+  );
+  const tasks = useMemo(
+    () => allTasks.filter((t) => t.projectId === project.id),
+    [allTasks, project.id],
+  );
   const toggleGroup = useProjectBoardStore((s) => s.toggleGroup);
   const addGroup = useProjectBoardStore((s) => s.addGroup);
   const addTask = useProjectBoardStore((s) => s.addTask);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTask, setDetailTask] = useState<BoardTask | null>(null);
-
-  ensureProject(project.id);
 
   const filteredTasks = query.trim()
     ? tasks.filter((t) => t.title.toLowerCase().includes(query.toLowerCase()))

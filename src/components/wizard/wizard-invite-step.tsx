@@ -1,9 +1,12 @@
 "use client";
 
-import { Calendar, Clock, Eye, Play, Save, Shield } from "lucide-react";
+import { Calendar, Clock, Save, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useWizardStore } from "@/lib/store/wizard-store";
+import { getWizardIllustration, getWizardIllustrationFallback } from "@/lib/wizard/wizard-images";
+import { WizardImageSelectCard } from "@/components/wizard/wizard-image-select-card";
 import type { SessionMode, WizardLaunchMode } from "@/types/facilitation";
 import { agendaTotalMinutes, fmtAgendaDuration } from "@/lib/meetings/agenda-generator";
 import type { MeetingAgendaBlock } from "@/types/facilitation";
@@ -16,6 +19,35 @@ const PLATFORMS = [
   { id: "hybride", label: "Hybride" },
 ];
 
+const LAUNCH_OPTIONS: {
+  id: WizardLaunchMode;
+  imageId: string;
+  title: string;
+  desc: string;
+  soloOnly?: boolean;
+  teamOnly?: boolean;
+}[] = [
+  {
+    id: "now",
+    imageId: "launch_now",
+    title: "Lancer maintenant",
+    desc: "Ouvre la séance immédiatement après confirmation.",
+  },
+  {
+    id: "schedule",
+    imageId: "launch_schedule",
+    title: "Programmer pour plus tard",
+    desc: "La séance est planifiée avec rappel avant la date.",
+  },
+  {
+    id: "simulate",
+    imageId: "launch_simulate",
+    title: "Simuler la rencontre",
+    desc: "Parcourez la séance seul — aucun participant n'est notifié.",
+    teamOnly: true,
+  },
+];
+
 export function WizardInviteStep({
   mode,
   title,
@@ -24,7 +56,6 @@ export function WizardInviteStep({
   end,
   platform,
   link,
-  launchMode,
   agendaPlan,
   onChange,
   onSaveDraft,
@@ -36,7 +67,6 @@ export function WizardInviteStep({
   end: string;
   platform: string;
   link: string;
-  launchMode: WizardLaunchMode;
   agendaPlan: MeetingAgendaBlock[];
   onChange: (patch: {
     meetingTitle?: string;
@@ -45,15 +75,21 @@ export function WizardInviteStep({
     meetingEnd?: string;
     meetingPlatform?: string;
     meetingLink?: string;
-    launchMode?: WizardLaunchMode;
   }) => void;
   onSaveDraft: () => void;
 }) {
+  const launchMode = useWizardStore((s) => s.launchMode);
+  const setLaunchMode = useWizardStore((s) => s.setLaunchMode);
   const isSolo = mode === "solo";
   const total = agendaTotalMinutes(agendaPlan);
 
+  const visibleLaunchOptions = LAUNCH_OPTIONS.filter((opt) => {
+    if (isSolo && opt.teamOnly) return false;
+    return true;
+  });
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Lancer ma session</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -61,7 +97,7 @@ export function WizardInviteStep({
         </p>
       </div>
 
-      <div className="rounded-2xl border bg-background p-5 space-y-4">
+      <div className="space-y-4 rounded-2xl border bg-background p-5">
         <h2 className="font-extrabold">Détails de la rencontre</h2>
         <div>
           <label className="text-xs font-bold text-muted-foreground">Titre de la rencontre</label>
@@ -121,8 +157,8 @@ export function WizardInviteStep({
                     type="button"
                     onClick={() => onChange({ meetingPlatform: p.id })}
                     className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-bold",
-                      platform === p.id ? "border-primary bg-primary/10 text-primary" : "",
+                      "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
+                      platform === p.id ? "border-primary bg-primary/10 text-primary" : "hover:border-primary/40",
                     )}
                   >
                     {p.label}
@@ -143,78 +179,43 @@ export function WizardInviteStep({
         )}
       </div>
 
-      <div className="rounded-2xl border bg-background p-5 space-y-4">
-        <h2 className="font-extrabold">Comment souhaitez-vous lancer la séance ?</h2>
-        <p className="text-sm text-muted-foreground">Choisissez l&apos;option qui correspond à votre besoin.</p>
+      <div className="space-y-4 rounded-2xl border bg-background p-5">
+        <div>
+          <h2 className="font-extrabold">Comment souhaitez-vous lancer la séance ?</h2>
+          <p className="text-sm text-muted-foreground">Choisissez l&apos;option qui correspond à votre besoin.</p>
+        </div>
         <div className={cn("grid gap-3", isSolo ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
-          <LaunchCard
-            icon={Play}
-            title="Lancer maintenant"
-            desc="Ouvre la séance immédiatement après confirmation."
-            on={launchMode === "now"}
-            onClick={() => onChange({ launchMode: "now" })}
-          />
-          <LaunchCard
-            icon={Calendar}
-            title="Programmer pour plus tard"
-            desc="La séance est planifiée avec rappel avant la date."
-            on={launchMode === "schedule"}
-            onClick={() => onChange({ launchMode: "schedule" })}
-          />
-          {!isSolo && (
-            <LaunchCard
-              icon={Eye}
-              title="Simuler la rencontre"
-              desc="Parcourez la séance seul — aucun participant n'est notifié."
-              on={launchMode === "simulate"}
-              onClick={() => onChange({ launchMode: "simulate" })}
-              violet
+          {visibleLaunchOptions.map((opt) => (
+            <WizardImageSelectCard
+              key={opt.id}
+              testId={`launch-${opt.id}`}
+              imageSrc={getWizardIllustration(opt.imageId)}
+              imageFallbackSrc={getWizardIllustrationFallback(opt.imageId)}
+              title={opt.title}
+              tag="Lancement"
+              metaLabel={opt.id === "now" ? "Immédiat" : opt.id === "schedule" ? "Planifié" : "Simulation"}
+              description={opt.desc}
+              selected={launchMode === opt.id}
+              onClick={() => setLaunchMode(opt.id)}
             />
-          )}
+          ))}
         </div>
       </div>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Shield className="h-4 w-4" />
-        Votre plan de travail est prêt à démarrer.
+        {launchMode === "schedule"
+          ? "La rencontre sera enregistrée et visible dans vos rencontres planifiées."
+          : launchMode === "simulate"
+            ? "Mode simulation : vous seul parcourez la séance, sans notification."
+            : "Votre plan de travail est prêt à démarrer."}
       </div>
 
-      <Button type="button" variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={onSaveDraft}>
+      <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={onSaveDraft}>
         <Save className="h-4 w-4" />
         Enregistrer le brouillon
       </Button>
     </div>
-  );
-}
-
-function LaunchCard({
-  icon: Icon,
-  title,
-  desc,
-  on,
-  onClick,
-  violet,
-}: {
-  icon: typeof Play;
-  title: string;
-  desc: string;
-  on: boolean;
-  onClick: () => void;
-  violet?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative rounded-2xl border p-4 text-left transition-colors",
-        on && (violet ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-primary bg-primary/5 ring-2 ring-primary/20"),
-      )}
-    >
-      <Icon className={cn("h-8 w-8", violet ? "text-violet-600" : "text-primary")} />
-      <p className="mt-3 font-extrabold">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{desc}</p>
-    </button>
   );
 }
 

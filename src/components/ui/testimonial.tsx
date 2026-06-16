@@ -38,24 +38,6 @@ export function AnimatedTestimonials({
     [testimonials],
   );
 
-  useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7832/ingest/7be77228-998b-4d1e-b4e0-c2eb9fd16e21", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f9c664" },
-      body: JSON.stringify({
-        sessionId: "f9c664",
-        runId: "post-fix",
-        hypothesisId: "H1",
-        location: "testimonial.tsx:rotations",
-        message: "Deterministic rotations mounted",
-        data: { rotations, count: testimonials.length },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, [rotations, testimonials.length]);
-
   const handleNext = useCallback(() => {
     setActive((prev) => (prev + 1) % testimonials.length);
   }, [testimonials.length]);

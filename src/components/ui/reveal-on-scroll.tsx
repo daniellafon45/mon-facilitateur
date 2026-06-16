@@ -3,8 +3,9 @@
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { MOTION_EASE as REVEAL_EASE } from "@/lib/motion/tokens";
 
-export const REVEAL_EASE = [0.16, 1, 0.3, 1] as const;
+export { REVEAL_EASE };
 
 interface RevealOnScrollProps {
   children: ReactNode;
