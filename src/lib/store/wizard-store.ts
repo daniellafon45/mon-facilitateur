@@ -53,6 +53,7 @@ interface WizardStoreState {
   members: WizardMember[];
   confirmedGroups: WizardConfirmedGroup[] | null;
   groupAssign: Record<string, WizardGroupAssign>;
+  roleAssign: Record<string, string>;
   meetingTitle: string;
   meetingDate: string;
   meetingStart: string;
@@ -60,6 +61,8 @@ interface WizardStoreState {
   launchMode: WizardLaunchMode;
   meetingPlatform: string;
   meetingLink: string;
+  registryDraft: import("@/lib/project/registry-types").ProjectRegistryPayload | null;
+  inviteMode: "together" | "separate";
   draftHydrated: boolean;
 }
 
@@ -84,6 +87,9 @@ interface WizardStore extends WizardStoreState {
   setMembers: (members: WizardMember[]) => void;
   setConfirmedGroups: (groups: WizardConfirmedGroup[] | null) => void;
   setGroupAssign: (assign: Record<string, WizardGroupAssign>) => void;
+  setRoleAssign: (assign: Record<string, string>) => void;
+  setRegistryDraft: (draft: import("@/lib/project/registry-types").ProjectRegistryPayload | null) => void;
+  setInviteMode: (mode: "together" | "separate") => void;
   setMeetingDetails: (patch: Partial<Pick<WizardStore, "meetingTitle" | "meetingDate" | "meetingStart" | "meetingEnd" | "meetingPlatform" | "meetingLink" | "launchMode">>) => void;
   setLaunchMode: (launchMode: WizardLaunchMode) => void;
   setRightCollapsed: (collapsed: boolean) => void;
@@ -126,6 +132,7 @@ const INITIAL_STATE: WizardStoreState = {
   members: [],
   confirmedGroups: null,
   groupAssign: {},
+  roleAssign: {},
   meetingTitle: "Ma session de travail",
   meetingDate: new Date().toISOString().slice(0, 10),
   meetingStart: "13:30",
@@ -133,6 +140,8 @@ const INITIAL_STATE: WizardStoreState = {
   launchMode: "now",
   meetingPlatform: "meet",
   meetingLink: "",
+  registryDraft: null,
+  inviteMode: "together",
   draftHydrated: false,
 };
 
@@ -161,6 +170,7 @@ const PERSIST_KEYS: (keyof WizardStoreState)[] = [
   "members",
   "confirmedGroups",
   "groupAssign",
+  "roleAssign",
   "meetingTitle",
   "meetingDate",
   "meetingStart",
@@ -168,6 +178,8 @@ const PERSIST_KEYS: (keyof WizardStoreState)[] = [
   "launchMode",
   "meetingPlatform",
   "meetingLink",
+  "registryDraft",
+  "inviteMode",
 ];
 
 function toPayload(state: WizardStoreState): WizardPayload {
@@ -191,6 +203,7 @@ function toPayload(state: WizardStoreState): WizardPayload {
     members: state.members,
     confirmedGroups: state.confirmedGroups,
     groupAssign: state.groupAssign,
+    roleAssign: state.roleAssign,
     meetingTitle: state.meetingTitle,
     meetingDate: state.meetingDate,
     meetingStart: state.meetingStart,
@@ -198,6 +211,8 @@ function toPayload(state: WizardStoreState): WizardPayload {
     launchMode: state.launchMode,
     meetingPlatform: state.meetingPlatform,
     meetingLink: state.meetingLink,
+    registryDraft: state.registryDraft,
+    inviteMode: state.inviteMode,
     whiteboardElements: state.whiteboardElements,
     whiteboardView: state.whiteboardView,
   };
@@ -224,6 +239,7 @@ function payloadToState(data: WizardPayload): Partial<WizardStoreState> {
     members: data.members ?? [],
     confirmedGroups: data.confirmedGroups ?? null,
     groupAssign: data.groupAssign ?? {},
+    roleAssign: data.roleAssign ?? data.essentialRoles ?? {},
     meetingTitle: data.meetingTitle ?? "Ma session de travail",
     meetingDate: data.meetingDate ?? new Date().toISOString().slice(0, 10),
     meetingStart: data.meetingStart ?? "13:30",
@@ -231,6 +247,8 @@ function payloadToState(data: WizardPayload): Partial<WizardStoreState> {
     launchMode: data.launchMode ?? "now",
     meetingPlatform: data.meetingPlatform ?? "meet",
     meetingLink: data.meetingLink ?? "",
+    registryDraft: data.registryDraft ?? null,
+    inviteMode: data.inviteMode ?? "together",
     whiteboardElements: data.whiteboardElements ?? [],
     whiteboardView: data.whiteboardView ?? { tx: 0, ty: 0, k: 1 },
   };
@@ -285,6 +303,9 @@ export const useWizardStore = create<WizardStore>()(
       setMembers: (members) => { set({ members }); void get().persistDraft(); },
       setConfirmedGroups: (confirmedGroups) => { set({ confirmedGroups }); void get().persistDraft(); },
       setGroupAssign: (groupAssign) => { set({ groupAssign }); void get().persistDraft(); },
+      setRoleAssign: (roleAssign) => { set({ roleAssign }); void get().persistDraft(); },
+      setRegistryDraft: (registryDraft) => { set({ registryDraft }); void get().persistDraft(); },
+      setInviteMode: (inviteMode) => { set({ inviteMode }); void get().persistDraft(); },
       setMeetingDetails: (patch) => { set(patch); void get().persistDraft(); },
       setLaunchMode: (launchMode) => { set({ launchMode }); void get().persistDraft(); },
       setRightCollapsed: (rightCollapsed) => set({ rightCollapsed }),
@@ -310,6 +331,7 @@ export const useWizardStore = create<WizardStore>()(
           members: data.members ?? get().members,
           confirmedGroups: data.confirmedGroups ?? get().confirmedGroups,
           groupAssign: data.groupAssign ?? get().groupAssign,
+          roleAssign: data.roleAssign ?? get().roleAssign,
           meetingTitle: data.meetingTitle ?? get().meetingTitle,
           meetingDate: data.meetingDate ?? get().meetingDate,
           meetingStart: data.meetingStart ?? get().meetingStart,

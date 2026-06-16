@@ -18,6 +18,13 @@ import { RaciMatrix } from "@/components/modeles/raci-matrix";
 import { ToolRoleMatrix } from "@/components/modeles/tool-role-matrix";
 import { ToolTeamCharter } from "@/components/modeles/tool-team-charter";
 import { ToolCommPlan } from "@/components/modeles/tool-comm-plan";
+import {
+  RaciTable,
+  CharteEditor,
+  RegTable,
+  COMMS_COLS,
+} from "@/components/projets/project-tabs/registry-tables";
+import { useProjectRegistry } from "@/lib/hooks/use-project-registry";
 import { SessionQuickTool } from "@/components/modeles/session-quick-tool";
 import {
   SaveMethodToProjectDialog,
@@ -40,9 +47,10 @@ interface MethodLiveOverlayProps {
   onToast?: (msg: string) => void;
   /** En séance live : masque le CTA « Utiliser en séance » et adapte le libellé. */
   context?: "library" | "session";
+  projectId?: string | null;
 }
 
-export function MethodLiveOverlay({ item, onClose, onToast, context = "library" }: MethodLiveOverlayProps) {
+export function MethodLiveOverlay({ item, onClose, onToast, context = "library", projectId }: MethodLiveOverlayProps) {
   const [mounted, setMounted] = useState(false);
   const [saveDialog, setSaveDialog] = useState<SaveMethodDialogMode | null>(null);
   const [saving, setSaving] = useState(false);
@@ -65,6 +73,7 @@ export function MethodLiveOverlay({ item, onClose, onToast, context = "library" 
   const [methodState, setMethodState] = useState<SessionState>({});
   const [raci, setRaci] = useState(() => createEmptyRaci(memberIds));
   const [roles, setRoles] = useState<MeetingRole[]>(() => DEFAULT_MEETING_ROLES.map((r) => ({ ...r })));
+  const { registry, update: updateRegistry } = useProjectRegistry(projectId ?? "", []);
 
   useEffect(() => {
     setMounted(true);
@@ -152,6 +161,14 @@ export function MethodLiveOverlay({ item, onClose, onToast, context = "library" 
 
     switch (item.id) {
       case "raci":
+        if (projectId) {
+          return (
+            <RaciTable
+              data={registry.raci}
+              onChange={(raci) => updateRegistry((prev) => ({ ...prev, raci }))}
+            />
+          );
+        }
         return <RaciMatrix members={members} raci={raci} setRaci={setRaci} />;
       case "roles":
         return (
@@ -163,6 +180,14 @@ export function MethodLiveOverlay({ item, onClose, onToast, context = "library" 
           </>
         );
       case "charter":
+        if (projectId) {
+          return (
+            <CharteEditor
+              charte={registry.charte}
+              onChange={(charte) => updateRegistry((prev) => ({ ...prev, charte }))}
+            />
+          );
+        }
         return (
           <>
             <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
@@ -172,6 +197,16 @@ export function MethodLiveOverlay({ item, onClose, onToast, context = "library" 
           </>
         );
       case "commplan":
+        if (projectId) {
+          return (
+            <RegTable
+              columns={COMMS_COLS}
+              rows={registry.comms}
+              onChange={(comms) => updateRegistry((prev) => ({ ...prev, comms }))}
+              addLabel="Ajouter un canal"
+            />
+          );
+        }
         return (
           <>
             <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
@@ -205,7 +240,7 @@ export function MethodLiveOverlay({ item, onClose, onToast, context = "library" 
           </div>
         );
     }
-  }, [item, methodState, raci, roles, members]);
+  }, [item, methodState, raci, roles, members, projectId, registry, updateRegistry]);
 
   const isFull = item.full || item.id === "tableau-blanc";
 

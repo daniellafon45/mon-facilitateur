@@ -24,6 +24,8 @@ import { WizardMethodStep } from "@/components/wizard/wizard-method-step";
 import { WizardAgendaStep } from "@/components/wizard/wizard-agenda-step";
 import { WizardSoloConfigStep } from "@/components/wizard/wizard-solo-config-step";
 import { WizardTeamStep } from "@/components/wizard/wizard-team-step";
+import { WizardTeamRail, buildPrepItems } from "@/components/wizard/wizard-team-rail";
+import { RegistryToolModal, type RegistryToolId } from "@/components/wizard/registry-tool-modal";
 import { WizardInviteStep, InvitePreviewPanel } from "@/components/wizard/wizard-invite-step";
 import { WizardMethodFooterSummary } from "@/components/wizard/wizard-method-footer-summary";
 import { GENRE_BY_ID } from "@/lib/methods/session-genres";
@@ -33,6 +35,20 @@ import { exportBoardImageBase64 } from "@/lib/whiteboard/export-board-image";
 import type { WhiteboardBoardHandle } from "@/components/whiteboard/whiteboard-board";
 import { getProjectUniverse, type ProjectTypeId } from "@/lib/wizard/project-types";
 import type { SessionMode } from "@/types/facilitation";
+import { WIZARD_DRAFT_PROJECT_ID, MEMBER_COLORS } from "@/lib/project/team-constants";
+import { useProjectMembers } from "@/lib/hooks/use-project-members";
+import { useWizardRegistry } from "@/lib/hooks/use-wizard-registry";
+import { allMembersAssigned } from "@/lib/project/subgroups";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { User } from "lucide-react";
 
 function stepSlugToKey(stepSlug: string) {
   return Object.entries(STEP_KEYS).find(([, slug]) => slug === stepSlug)?.[0] ?? null;
@@ -50,10 +66,14 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
   const [analyzing, setAnalyzing] = useState(false);
   const boardExportRef = useRef<WhiteboardBoardHandle | null>(null);
   const [genrePreviewId, setGenrePreviewId] = useState<string | null>(null);
+  const [e4Tool, setE4Tool] = useState<RegistryToolId | null>(null);
+  const [e4Conseils, setE4Conseils] = useState(false);
+  const [soloWarnOpen, setSoloWarnOpen] = useState(false);
+  const [teamsRailOpen, setTeamsRailOpen] = useState(false);
   const seedApplied = useRef(false);
   const explicitNavRef = useRef(false);
   const pendingStepKeyRef = useRef<string | null>(null);
-  const stepDirectionRef = useRef<WizardDirection>("forward");
+  const [stepDirection, setStepDirection] = useState<WizardDirection>("forward");
   const finishingSnapshotRef = useRef<{ stepKey: string; stepIdx: number; path: string[] } | null>(null);
 
   const path = useMemo(() => getStepPath(wizard.mode), [wizard.mode]);
@@ -109,10 +129,15 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
 
   const selGenre = wizard.genre ? GENRE_BY_ID[wizard.genre] : null;
   const previewGenre = GENRE_BY_ID[genrePreviewId ?? wizard.genre ?? ""] ?? null;
+  const teamProjectId = wizard.projectId ?? WIZARD_DRAFT_PROJECT_ID;
+  const { members: teamMembers, addMember: addTeamMember } = useProjectMembers(teamProjectId);
+  const { registry: teamRegistry } = useWizardRegistry(wizard.projectId, teamMembers.map((m) => m.displayName));
+  const contacts = useFacilitationStore((s) => s.contacts);
+  const savedTeams = useFacilitationStore((s) => s.teams);
 
   function navigateToStep(idx: number) {
     if (idx < 0 || idx >= path.length) return;
-    stepDirectionRef.current = idx > wizard.stepIdx ? "forward" : "back";
+    setStepDirection(idx > wizard.stepIdx ? "forward" : "back");
     explicitNavRef.current = true;
     pendingStepKeyRef.current = path[idx];
     wizard.setStepIdx(idx);
@@ -124,7 +149,7 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
       router.push("/dashboard");
       return;
     }
-    stepDirectionRef.current = "back";
+    setStepDirection("back");
     navigateToStep(wizard.stepIdx - 1);
   }
 
@@ -224,7 +249,34 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
       void handleWhiteboardContinue();
       return;
     }
+    if (
+      stepKey === "e4" &&
+      wizard.mode === "equipe" &&
+      teamMembers.length <= 1
+    ) {
+      setSoloWarnOpen(true);
+      return;
+    }
     goNext();
+  }
+
+  async function addSavedTeam(teamId: string) {
+    const team = savedTeams.find((t) => t.id === teamId);
+    if (!team) return;
+    let added = 0;
+    for (const contactId of team.memberIds) {
+      const c = contacts.find((x) => x.id === contactId);
+      if (!c || teamMembers.some((m) => m.contactId === c.id)) continue;
+      await addTeamMember({
+        contactId: c.id,
+        displayName: c.name,
+        email: c.email,
+        color: MEMBER_COLORS[(teamMembers.length + added) % MEMBER_COLORS.length],
+        accessRole: "Éditeur",
+        meetingRole: c.role || "Participante",
+      });
+      added += 1;
+    }
   }
 
   function canContinue(): boolean {
@@ -239,8 +291,21 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         return wizard.methods.length > 0;
       case "agenda":
         return wizard.agendaPlan.length > 0;
-      case "e4":
-        return wizard.mode !== "atelier" || Boolean(wizard.confirmedGroups?.length);
+      case "e4": {
+        if (wizard.mode === "atelier") {
+          const groups = wizard.confirmedGroups ?? [];
+          const memberIds = teamMembers.map((m) => m.id);
+          return (
+            groups.length > 0 &&
+            allMembersAssigned(
+              memberIds,
+              groups,
+              memberIds.filter((id) => !groups.some((g) => g.memberIds.includes(id))),
+            )
+          );
+        }
+        return true;
+      }
       case "e7":
         return Boolean(wizard.meetingTitle.trim() && wizard.meetingDate && wizard.meetingStart);
       default:
@@ -291,8 +356,42 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         />
       );
     }
+    if (displayStepKey === "e4") {
+      const prepItems = buildPrepItems({
+        count: teamMembers.length,
+        mode: wizard.mode,
+        roleAssign: wizard.roleAssign,
+        confirmedGroups: wizard.confirmedGroups,
+        groupAssign: wizard.groupAssign,
+        registry: teamRegistry,
+        onOpenRaci: () => setE4Tool("raci"),
+      });
+      return (
+        <WizardTeamRail
+          count={teamMembers.length}
+          mode={wizard.mode}
+          prepItems={prepItems}
+          showConseils={e4Conseils}
+          onToggleConseils={() => setE4Conseils((v) => !v)}
+          onAddTeam={(id) => void addSavedTeam(id)}
+          savedTeamsOpen={teamsRailOpen}
+        />
+      );
+    }
     if (displayStepKey === "e7") {
-      return <InvitePreviewPanel title={wizard.meetingTitle} agendaPlan={wizard.agendaPlan} />;
+      return (
+        <InvitePreviewPanel
+          title={wizard.meetingTitle}
+          date={wizard.meetingDate}
+          start={wizard.meetingStart}
+          end={wizard.meetingEnd}
+          platform={wizard.meetingPlatform}
+          agendaPlan={wizard.agendaPlan}
+          members={wizard.members}
+          confirmedGroups={wizard.confirmedGroups}
+          launchMode={wizard.launchMode}
+        />
+      );
     }
     return null;
   })();
@@ -370,9 +469,25 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         return (
           <WizardTeamStep
             mode={wizard.mode}
-            projectId={wizard.projectId ?? undefined}
+            projectId={wizard.projectId}
+            members={wizard.members}
+            onMembersChange={wizard.setMembers}
+            roleAssign={wizard.roleAssign}
+            onRoleAssignChange={wizard.setRoleAssign}
             confirmedGroups={wizard.confirmedGroups}
             onGroupsChange={wizard.setConfirmedGroups}
+            groupAssign={wizard.groupAssign}
+            onGroupAssignChange={wizard.setGroupAssign}
+            methodIds={wizard.methods}
+            onModeChange={(m) => wizard.setMode(m)}
+            showConseils={e4Conseils}
+            onToggleConseils={() => setE4Conseils((v) => !v)}
+            onScrollToTeams={() => {
+              setE4Conseils(false);
+              setTeamsRailOpen(true);
+              wizard.setRightCollapsed(false);
+            }}
+            onOpenRegistryTool={setE4Tool}
           />
         );
       case "e7":
@@ -386,6 +501,11 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
             platform={wizard.meetingPlatform}
             link={wizard.meetingLink}
             agendaPlan={wizard.agendaPlan}
+            members={wizard.members}
+            confirmedGroups={wizard.confirmedGroups}
+            inviteMode={wizard.inviteMode}
+            onInviteModeChange={wizard.setInviteMode}
+            onMembersChange={wizard.setMembers}
             onChange={wizard.setMeetingDetails}
             onSaveDraft={() => void wizard.persistDraft()}
           />
@@ -400,6 +520,7 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
     Boolean(STEP_HAS_RIGHT_PANEL[displayStepKey] && (displayStepKey !== "genre" || previewGenre) && rightPanel);
 
   return (
+    <>
     <WizardShell
         steps={stepLabels}
         current={displayStepIdx}
@@ -425,11 +546,51 @@ export function WizardPage({ stepSlug }: { stepSlug: string }) {
         <PageTransition
           transitionKey={stepSlug}
           variant="wizard"
-          direction={stepDirectionRef.current}
+          direction={stepDirection}
         >
           {stepContent}
         </PageTransition>
       </WizardShell>
+      {displayStepKey === "e4" && (
+        <RegistryToolModal
+          tool={e4Tool}
+          projectId={wizard.projectId}
+          memberNames={teamMembers.map((m) => m.displayName)}
+          onClose={() => setE4Tool(null)}
+        />
+      )}
+
+      <Dialog open={soloWarnOpen} onOpenChange={setSoloWarnOpen}>
+        <DialogContent className="max-w-md text-center">
+          <DialogHeader className="items-center">
+            <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <User className="h-7 w-7" />
+            </div>
+            <DialogTitle>Vous êtes seul dans cette rencontre</DialogTitle>
+            <DialogDescription className="text-center">
+              Aucun autre participant n&apos;est ajouté. Vous pouvez inviter des personnes, ou
+              continuer en séance solo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button type="button" variant="outline" className="w-full" onClick={() => setSoloWarnOpen(false)}>
+              Ajouter des personnes
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => {
+                wizard.setMode("solo");
+                setSoloWarnOpen(false);
+                goNext();
+              }}
+            >
+              Continuer en solo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

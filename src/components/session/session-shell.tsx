@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -9,6 +9,7 @@ import {
   Expand,
   Eye,
   Link2,
+  Minimize2,
   Save,
   SlidersHorizontal,
 } from "lucide-react";
@@ -37,12 +38,15 @@ import { SessionAiPanel } from "@/components/session/session-ai-panel";
 import { SessionQuickToolModal } from "@/components/session/session-quick-tool-modal";
 import { SessionVotePanel } from "@/components/session/session-vote-panel";
 import {
+  appendActivity,
   appendNote,
   appendQuickLog,
   appendVote,
   appendDiscussion,
   setPrivateNotes,
   createSessionCapture,
+  type SessionActivityCategory,
+  type SessionActivityEntry,
   type SessionCaptureState,
 } from "@/lib/session/session-capture";
 import { findLibMethodItem } from "@/lib/methods/library-data";
@@ -59,6 +63,14 @@ interface SessionShellProps {
   objective?: string;
   simulating?: boolean;
   durationMin?: number;
+}
+
+function quickLogCategory(kind: string): SessionActivityCategory {
+  const k = kind.toLowerCase();
+  if (k.includes("équipe") || k.includes("equipe")) return "team";
+  if (k.includes("document")) return "document";
+  if (k.includes("discussion")) return "discussion";
+  return "tool";
 }
 
 export function SessionShell({
@@ -92,6 +104,14 @@ export function SessionShell({
   const [projectTool, setProjectTool] = useState<LibMethodItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
+  const contentLogTimerRef = useRef<number | undefined>(undefined);
+  const titleLogTimerRef = useRef<number | undefined>(undefined);
+  const prevMethodRef = useRef<string | null>(null);
+  const prevTitleRef = useRef(objective || "Ma séance");
+
+  const logActivity = useCallback((entry: Omit<SessionActivityEntry, "id" | "time">) => {
+    setCapture((c) => appendActivity(c, entry));
+  }, []);
 
   useEffect(() => {
     const t = window.setInterval(() => setElapsedTick((n) => n + 1), 60_000);
@@ -100,6 +120,30 @@ export function SessionShell({
 
   const currentMethodId = methodIds[methodIndex] ?? methodIds[0];
   const methodMeta = METHOD_BY_ID[currentMethodId];
+
+  useEffect(() => {
+    if (prevMethodRef.current === null) {
+      prevMethodRef.current = currentMethodId;
+      logActivity({
+        actor: "Vous",
+        category: "method",
+        action: "Méthode active",
+        summary: methodMeta?.title ?? currentMethodId,
+      });
+      return;
+    }
+    if (prevMethodRef.current !== currentMethodId) {
+      const prevTitle = METHOD_BY_ID[prevMethodRef.current]?.title ?? prevMethodRef.current;
+      logActivity({
+        actor: "Vous",
+        category: "method",
+        action: "Changement de méthode",
+        summary: methodMeta?.title ?? currentMethodId,
+        detail: `Méthode précédente : ${prevTitle}`,
+      });
+      prevMethodRef.current = currentMethodId;
+    }
+  }, [currentMethodId, methodMeta?.title, logActivity]);
 
   const assistContext = useMemo(
     () =>
@@ -117,21 +161,37 @@ export function SessionShell({
   );
 
   const journalize = useCallback((entry: Parameters<typeof appendQuickLog>[1]) => {
-    setCapture((c) => appendQuickLog(c, entry));
+    setCapture((c) => {
+      const withLog = appendQuickLog(c, entry);
+      return appendActivity(withLog, {
+        actor: "Vous",
+        category: quickLogCategory(entry.kind),
+        action: entry.kind,
+        summary: entry.q,
+        detail: entry.result,
+      });
+    });
     setToast("Entrée ajoutée au journal de la séance");
     window.setTimeout(() => setToast(null), 2200);
   }, []);
 
   const handleVoteClosed = useCallback(
     (data: { question: string; options: { label: string; pct: number }[]; total: number }) => {
-      setCapture((c) =>
-        appendVote(c, {
+      setCapture((c) => {
+        const withVote = appendVote(c, {
           kind: "Vote pondéré",
           q: data.question,
           total: data.total,
           options: data.options,
-        }),
-      );
+        });
+        return appendActivity(withVote, {
+          actor: "Vous",
+          category: "vote",
+          action: "Vote enregistré",
+          summary: data.question,
+          detail: data.options.map((o) => `${o.label} (${o.pct} %)`).join(" · "),
+        });
+      });
       setToast("Vote enregistré dans le journal");
       window.setTimeout(() => setToast(null), 2200);
     },
@@ -159,11 +219,16 @@ export function SessionShell({
 
   useEffect(() => {
     if (!previewFs) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPreviewFs(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [previewFs]);
 
   useEffect(() => {
@@ -184,15 +249,6 @@ export function SessionShell({
     });
   }, [mode, methodIds, projectId, meetingId, sessionId]);
 
-  useEffect(() => {
-    if (!previewFs) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewFs(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [previewFs]);
-
   const persist = useCallback(
     async (nextStates: Record<string, SessionState>, idx: number) => {
       if (!sessionId) return;
@@ -211,6 +267,16 @@ export function SessionShell({
     const next = { ...states, [currentMethodId]: patch };
     setStates(next);
     void persist(next, methodIndex);
+    window.clearTimeout(contentLogTimerRef.current);
+    contentLogTimerRef.current = window.setTimeout(() => {
+      logActivity({
+        actor: "Vous",
+        category: "content",
+        action: "Contenu modifié",
+        summary: methodMeta?.title ?? currentMethodId,
+        detail: "Remplissage ou modification dans l'outil actif",
+      });
+    }, 4000);
   }
 
   function goMethod(id: string) {
@@ -230,7 +296,32 @@ export function SessionShell({
     else setConfirmEnd(true);
   }
 
+  function handleTitleChange(title: string) {
+    setSessTitle(title);
+    window.clearTimeout(titleLogTimerRef.current);
+    titleLogTimerRef.current = window.setTimeout(() => {
+      if (title.trim() && title !== prevTitleRef.current) {
+        logActivity({
+          actor: "Vous",
+          category: "session",
+          action: "Titre modifié",
+          summary: title.trim(),
+          detail: prevTitleRef.current ? `Ancien titre : ${prevTitleRef.current}` : undefined,
+        });
+        prevTitleRef.current = title;
+      }
+    }, 1500);
+  }
+
   async function finishSession() {
+    const captureWithEnd = appendActivity(capture, {
+      actor: "Vous",
+      category: "session",
+      action: "Séance terminée",
+      summary: sessTitle || objective || "Session",
+    });
+    setCapture(captureWithEnd);
+
     const report = {
       objective: sessTitle || objective,
       mode,
@@ -252,7 +343,7 @@ export function SessionShell({
       name: sessTitle || objective || "Session",
       projectId,
       methodIds,
-      capture,
+      capture: captureWithEnd,
       methodStates: states,
       simulating,
     });
@@ -261,6 +352,15 @@ export function SessionShell({
 
     if (simulating) {
       router.push("/dashboard/rencontres");
+      return;
+    }
+
+    if (mode === "solo") {
+      router.push(
+        meetingId
+          ? `/dashboard/session/solo/summary?meeting=${meetingId}`
+          : "/dashboard/session/solo/summary",
+      );
       return;
     }
 
@@ -329,16 +429,18 @@ export function SessionShell({
         capture={capture}
         onPrivateNotesChange={(text) => setCapture((c) => setPrivateNotes(c, text))}
         onDiscussionSend={(text) => {
-          setCapture((c) => appendDiscussion(c, text));
-          journalize({
-            kind: "Discussion",
-            icon: "MessageSquare",
-            color: "blue",
-            q: text,
-            result: "Message enregistré",
+          setCapture((c) => {
+            const withDiscussion = appendDiscussion(c, text);
+            return appendActivity(withDiscussion, {
+              actor: "Vous",
+              category: "discussion",
+              action: "Message envoyé",
+              summary: text,
+            });
           });
         }}
         onOpenQuickTool={openQuickTool}
+        onJournalize={journalize}
       />
     );
 
@@ -364,10 +466,10 @@ export function SessionShell({
 
         <SessionMethodShell
           title={sessTitle}
-          onTitleChange={setSessTitle}
+          onTitleChange={handleTitleChange}
           badge={mode}
-          onAssistant={() => setAiOpen(true)}
           focusMode={focusMode}
+          previewFullscreen={previewFs}
           menuActions={[
             {
               label: focusMode ? "Quitter la présentation" : "Mode présentation",
@@ -463,6 +565,7 @@ export function SessionShell({
                 <MethodLiveOverlay
                   item={projectTool}
                   context="session"
+                  projectId={projectId}
                   onClose={() => setProjectTool(null)}
                   onToast={(msg) => {
                     setToast(msg);
@@ -481,7 +584,15 @@ export function SessionShell({
               <FloatingSessionNote
                 hidden={focusMode}
                 onSave={(text) => {
-                  setCapture((c) => appendNote(c, text, "public"));
+                  setCapture((c) => {
+                    const withNote = appendNote(c, text, "public");
+                    return appendActivity(withNote, {
+                      actor: "Vous",
+                      category: "note",
+                      action: "Note ajoutée",
+                      summary: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+                    });
+                  });
                   setToast("Note enregistrée");
                   window.setTimeout(() => setToast(null), 2200);
                 }}
@@ -491,19 +602,21 @@ export function SessionShell({
                 <button
                   type="button"
                   onClick={() => setPreviewFs(false)}
-                  className="fixed right-4 top-4 z-[3000] flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-lg"
+                  className="fixed right-4 top-4 z-[3000] inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-lg"
                 >
-                  Quitter l&apos;aperçu · Échap
+                  <Minimize2 className="h-4 w-4" />
+                  Quitter le plein écran
+                  <span className="ml-0.5 rounded border border-white/35 px-1.5 py-0.5 text-[11px] font-semibold opacity-65">
+                    Échap
+                  </span>
                 </button>
               )}
             </>
           }
         >
-          {activeRail === "seance" && <div className="mb-4 lg:hidden">{votePanel}</div>}
-          <div className={previewFs ? "absolute inset-0 z-20 overflow-y-auto bg-background p-6" : undefined}>
-            {centerContent}
-          </div>
-          {activeRail === "seance" && <div className="mt-6 hidden lg:block">{votePanel}</div>}
+          {activeRail === "seance" && !previewFs && <div className="mb-4 lg:hidden">{votePanel}</div>}
+          {centerContent}
+          {activeRail === "seance" && !previewFs && <div className="mt-6 hidden lg:block">{votePanel}</div>}
         </SessionMethodShell>
       </div>
   );

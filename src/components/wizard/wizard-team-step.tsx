@@ -1,193 +1,349 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Users, Layers } from "lucide-react";
-import { PizzaSVG } from "@/components/ui/pizza-svg";
-import { PIZZA_STATUS_TONE_CLASS, pizzaSlices, pizzaStatus } from "@/lib/project/pizza";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Folder, Globe, Info, Layers, Users } from "lucide-react";
+import type { SessionMode, WizardConfirmedGroup, WizardGroupAssign, WizardMember } from "@/types/facilitation";
+import { WIZARD_DRAFT_PROJECT_ID } from "@/lib/project/team-constants";
+import { shouldShowOverflowBanner } from "@/lib/project/team-advice";
+import type { TeamAdviceAction } from "@/lib/project/team-advice";
+import { pruneGroupsAfterMemberRemoval } from "@/lib/project/subgroups";
 import { useFacilitationStore } from "@/lib/store/facilitation-store";
-import { useProjectMembers } from "@/lib/hooks/use-project-members";
+import { useProjectMembers, preloadProjectMembers } from "@/lib/hooks/use-project-members";
+import { useWizardRegistry } from "@/lib/hooks/use-wizard-registry";
+import { useWizardStore } from "@/lib/store/wizard-store";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import type { SessionMode, WizardConfirmedGroup } from "@/types/facilitation";
-
-const COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#db2777"];
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { TeamAdvicePanel } from "@/components/wizard/team/team-advice-panel";
+import { TeamAtelierConfirmModal } from "@/components/wizard/team/team-atelier-confirm-modal";
+import { TeamConfirmedGroups } from "@/components/wizard/team/team-confirmed-groups";
+import { TeamLimitModal } from "@/components/wizard/team/team-limit-modal";
+import { TeamMembersPanel } from "@/components/wizard/team/team-members-panel";
+import { TeamOptionalTools } from "@/components/wizard/team/team-optional-tools";
+import { TeamOverflowBanner } from "@/components/wizard/team/team-overflow-banner";
+import {
+  TeamRolesPanel,
+  inferRoleAssignFromMembers,
+} from "@/components/wizard/team/team-roles-panel";
+import { TeamSubgroupsModal } from "@/components/wizard/team/team-subgroups-modal";
+import type { RegistryToolId } from "@/components/wizard/registry-tool-modal";
 
 export function WizardTeamStep({
   projectId,
   mode,
+  methodIds = [],
+  members: _membersProp,
+  onMembersChange,
   confirmedGroups,
+  groupAssign = {},
+  roleAssign = {},
   onGroupsChange,
+  onGroupAssignChange,
+  onRoleAssignChange,
+  onModeChange,
+  showConseils,
+  onToggleConseils,
+  onScrollToTeams,
+  onOpenRegistryTool,
 }: {
-  projectId?: string;
+  projectId?: string | null;
   mode?: SessionMode | null;
+  methodIds?: string[];
+  members?: WizardMember[];
+  onMembersChange?: (members: WizardMember[]) => void;
   confirmedGroups?: WizardConfirmedGroup[] | null;
+  groupAssign?: Record<string, WizardGroupAssign>;
+  roleAssign?: Record<string, string>;
   onGroupsChange?: (groups: WizardConfirmedGroup[] | null) => void;
+  onGroupAssignChange?: (assign: Record<string, WizardGroupAssign>) => void;
+  onRoleAssignChange?: (assign: Record<string, string>) => void;
+  onModeChange?: (mode: SessionMode) => void;
+  showConseils?: boolean;
+  onToggleConseils?: () => void;
+  onScrollToTeams?: () => void;
+  onOpenRegistryTool?: (tool: RegistryToolId) => void;
 }) {
-  const contacts = useFacilitationStore((s) => s.contacts);
   const projects = useFacilitationStore((s) => s.projects);
-  const pid = projectId ?? "wizard-draft";
-  const { members, addMember, removeMember } = useProjectMembers(pid);
-  const [showContacts, setShowContacts] = useState(false);
-  const [groupName, setGroupName] = useState("");
+  const setWizardProjectId = useWizardStore((s) => s.setProjectId);
+
+  const pid = projectId ?? WIZARD_DRAFT_PROJECT_ID;
+  const { members, loading, addMember, updateMember, removeMember } =
+    useProjectMembers(pid);
+  const memberNames = members.map((m) => m.displayName);
+  const { registry } = useWizardRegistry(projectId, memberNames);
+
+  const [overflowDismissed, setOverflowDismissed] = useState(false);
+  const [subgroupsOpen, setSubgroupsOpen] = useState(false);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [atelierOpen, setAtelierOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [assocPending, setAssocPending] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
 
   const count = members.length;
-  const slices = pizzaSlices(count);
-  const status = pizzaStatus(count);
-  const toneClass = PIZZA_STATUS_TONE_CLASS[status.tone];
   const isAtelier = mode === "atelier";
   const groups = confirmedGroups ?? [];
+  const showOverflow = shouldShowOverflowBanner(count, overflowDismissed);
+  const conseils = showConseils ?? false;
 
-  const available = useMemo(
-    () => contacts.filter((c) => !members.some((m) => m.contactId === c.id)),
-    [contacts, members],
-  );
+  useEffect(() => {
+    onMembersChange?.(
+      members.map((m) => ({
+        id: m.id,
+        name: m.displayName,
+        email: m.email,
+        role: m.meetingRole,
+        projectAccess: m.accessRole,
+        color: m.color,
+      })),
+    );
+  }, [members, onMembersChange]);
 
-  const addGroup = () => {
-    if (!groupName.trim() || !onGroupsChange) return;
-    const g: WizardConfirmedGroup = {
-      id: `g${Date.now()}`,
-      name: groupName.trim(),
-      memberIds: [],
-    };
-    onGroupsChange([...groups, g]);
-    setGroupName("");
+  const projectName =
+    projectId && projects.find((p) => p.id === projectId)?.name
+      ? projects.find((p) => p.id === projectId)!.name
+      : "Nouveau projet";
+
+  useEffect(() => {
+    if (members.length === 0 && !loading && onRoleAssignChange) {
+      onRoleAssignChange(inferRoleAssignFromMembers(members, roleAssign));
+    }
+  }, [members.length, loading]);
+
+  useEffect(() => {
+    if (members.length > 0 && onRoleAssignChange) {
+      const inferred = inferRoleAssignFromMembers(members, roleAssign);
+      if (JSON.stringify(inferred) !== JSON.stringify(roleAssign)) {
+        onRoleAssignChange(inferred);
+      }
+    }
+  }, [members.map((m) => `${m.id}:${m.meetingRole}`).join("|")]);
+
+  const triggerOverflow = () => {
+    if (count >= 10) setOverflowDismissed(false);
+  };
+
+  const handleAdviceAction = (act: TeamAdviceAction) => {
+    onToggleConseils?.();
+    if (act === "subgroups") setSubgroupsOpen(true);
+    else if (act === "atelier") setAtelierOpen(true);
+    else if (act === "limit") setLimitOpen(true);
+    else if (act === "invite") addInputRef.current?.focus();
+    else if (act === "teams") onScrollToTeams?.();
+  };
+
+  const handleLimitConfirm = async (ids: string[]) => {
+    for (const id of ids) await removeMember(id);
+    if (onGroupsChange) {
+      onGroupsChange(pruneGroupsAfterMemberRemoval(confirmedGroups ?? null, ids));
+    }
+    setLimitOpen(false);
+  };
+
+  const handleAtelierConfirm = () => {
+    onModeChange?.("atelier");
+    setAtelierOpen(false);
+    setTimeout(() => setSubgroupsOpen(true), 200);
+  };
+
+  const assignProject = async (targetId: string | null) => {
+    setWizardProjectId(targetId);
+    setAssocPending(null);
+    setProjectOpen(false);
+    if (targetId) {
+      await preloadProjectMembers(targetId);
+    }
   };
 
   return (
-    <div className="space-y-5">
-      {projects.length > 0 && (
-        <div className="rounded-xl border bg-slate-50 p-4">
-          <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground mb-2">
-            Associer à un projet
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {projectId
-              ? projects.find((p) => p.id === projectId)?.name ?? "Projet sélectionné"
-              : "Un nouveau projet sera créé à l'étape de lancement."}
-          </p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight">Équipe &amp; rôles</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Folder className="h-3.5 w-3.5" />
+            <span>
+              Projet associé : <strong className="text-foreground">{projectName}</strong>
+            </span>
+            {projects.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 font-bold text-violet-700"
+                  onClick={() => setProjectOpen((v) => !v)}
+                >
+                  Associer à un projet existant
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {projectOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setProjectOpen(false)} />
+                    <div className="absolute left-0 top-full z-50 mt-1 min-w-[240px] rounded-xl border bg-white p-1.5 shadow-lg">
+                      <button
+                        type="button"
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-semibold hover:bg-slate-50"
+                        onClick={() => void assignProject(null)}
+                      >
+                        Nouveau projet
+                      </button>
+                      {projects.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-semibold hover:bg-slate-50"
+                          onClick={() => {
+                            setProjectOpen(false);
+                            setAssocPending(p.id);
+                          }}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+
+        <div className="flex flex-col items-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={isAtelier ? "default" : "outline"}
+            className="rounded-xl"
+            onClick={() => setSubgroupsOpen(true)}
+          >
+            <Users className="mr-1 h-4 w-4" />
+            {groups.length
+              ? "Modifier les sous-groupes"
+              : isAtelier
+                ? "Créer les sous-groupes"
+                : "Créer des sous-groupes"}
+          </Button>
+          <div className="flex items-center gap-2 rounded-xl border bg-slate-50 px-3 py-2 text-sm font-bold">
+            <Users className="h-4 w-4" />
+            {count} participants
+          </div>
+        </div>
+      </div>
 
       {isAtelier && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4">
-          <div className="flex items-center gap-2 font-extrabold text-violet-800">
-            <Layers className="h-4 w-4" />
-            Mode grand atelier
-          </div>
-          <p className="mt-1 text-sm text-violet-900/80">
-            Organisez des sous-groupes avec un facilitateur et une méthode par salle.
+        <div className="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-700" />
+          <p className="text-sm leading-relaxed text-violet-950/90">
+            En grand atelier, les <strong>sous-groupes sont au cœur</strong> de la rencontre.
+            Créez vos salles, répartissez les membres, puis désignez un{" "}
+            <strong>facilitateur</strong> et une <strong>méthode</strong> par salle.
           </p>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-slate-50 p-4">
-        <PizzaSVG used={slices.pizza1} total={5} size={64} />
-        <PizzaSVG used={slices.pizza2} total={5} size={64} />
-        <div className="min-w-[180px] flex-1">
-          <div className="flex items-center gap-2 font-extrabold">
-            <Users className="h-4 w-4 text-violet-600" />
-            Règle des deux pizzas
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {count} participant{count > 1 ? "s" : ""} — idéal : 3 à 9, max 10.
-          </p>
-          <div className={cn("mt-2 rounded-lg border px-3 py-2 text-xs", toneClass)}>
-            <strong>{status.label}</strong> — {status.advice}
-          </div>
-        </div>
+      {showOverflow && <TeamOverflowBanner onDismiss={() => setOverflowDismissed(true)} />}
+
+      {conseils && (
+        <TeamAdvicePanel count={count} onAction={handleAdviceAction} onClose={() => onToggleConseils?.()} />
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TeamMembersPanel
+          members={members}
+          loading={loading}
+          addInputRef={addInputRef}
+          onAddMember={async (m) => {
+            await addMember(m);
+            triggerOverflow();
+          }}
+          onUpdateMember={updateMember}
+          onRemoveMember={removeMember}
+          onOverflow={triggerOverflow}
+        />
+        <TeamRolesPanel
+          members={members}
+          roleAssign={roleAssign}
+          onRoleAssignChange={(next) => onRoleAssignChange?.(next)}
+        />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {members.map((m) => (
-          <span
-            key={m.id}
-            className="inline-flex items-center gap-2 rounded-full border bg-white py-1 pl-1 pr-3 text-sm font-semibold"
-          >
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-extrabold text-white"
-              style={{ background: m.color }}
-            >
-              {m.displayName.slice(0, 2).toUpperCase()}
-            </span>
-            {m.displayName}
-            <button
+      {groups.length > 0 && onGroupsChange && (
+        <TeamConfirmedGroups
+          groups={groups}
+          members={members}
+          isAtelier={isAtelier}
+          methodIds={methodIds}
+          groupAssign={groupAssign}
+          onEdit={() => setSubgroupsOpen(true)}
+          onGroupAssignChange={(next) => onGroupAssignChange?.(next)}
+        />
+      )}
+
+      <TeamOptionalTools registry={registry} onOpenTool={(id) => onOpenRegistryTool?.(id)} />
+
+      <TeamSubgroupsModal
+        open={subgroupsOpen}
+        members={members}
+        initialGroups={confirmedGroups}
+        onClose={() => setSubgroupsOpen(false)}
+        onConfirm={(next) => {
+          onGroupsChange?.(next);
+          setSubgroupsOpen(false);
+        }}
+      />
+
+      <TeamLimitModal
+        open={limitOpen}
+        members={members}
+        onClose={() => setLimitOpen(false)}
+        onConfirm={handleLimitConfirm}
+      />
+
+      <TeamAtelierConfirmModal
+        open={atelierOpen}
+        onClose={() => setAtelierOpen(false)}
+        onConfirm={handleAtelierConfirm}
+      />
+
+      <Dialog open={Boolean(assocPending)} onOpenChange={(v) => !v && setAssocPending(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Associer à « {projects.find((p) => p.id === assocPending)?.name ?? "ce projet"} »
+            </DialogTitle>
+            <DialogDescription>
+              Voulez-vous garder l&apos;équipe et les outils déjà configurés pour ce projet ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
               type="button"
-              className="ml-1 text-slate-400 hover:text-red-500"
-              onClick={() => removeMember(m.id)}
+              className="w-full"
+              onClick={() => void assignProject(assocPending)}
             >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-
-      <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowContacts((v) => !v)}>
-        <Plus className="mr-1 h-4 w-4" /> Ajouter depuis Dream Team
-      </Button>
-
-      {showContacts && (
-        <div className="flex flex-wrap gap-2 rounded-xl border p-3">
-          {available.length === 0 ? (
-            <span className="text-sm text-muted-foreground">Aucun contact disponible.</span>
-          ) : (
-            available.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="rounded-lg border px-3 py-1.5 text-sm font-semibold hover:bg-slate-50"
-                onClick={() =>
-                  void addMember({
-                    contactId: c.id,
-                    displayName: c.name,
-                    email: c.email,
-                    color: COLORS[members.length % COLORS.length],
-                    accessRole: "Éditeur",
-                    meetingRole: "Participante",
-                  })
-                }
-              >
-                {c.name}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-
-      {isAtelier && onGroupsChange && (
-        <div className="space-y-3 rounded-xl border p-4">
-          <h3 className="font-extrabold">Sous-groupes</h3>
-          <div className="flex gap-2">
-            <Input
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Nom de la salle / sous-groupe"
-              className="max-w-xs"
-            />
-            <Button type="button" size="sm" onClick={addGroup}>
-              Ajouter
+              <Globe className="mr-1 h-4 w-4" />
+              Conserver l&apos;équipe du projet
             </Button>
-          </div>
-          {groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ajoutez au moins un sous-groupe pour continuer.</p>
-          ) : (
-            <ul className="space-y-2">
-              {groups.map((g) => (
-                <li key={g.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm font-semibold">
-                  {g.name}
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-red-500"
-                    onClick={() => onGroupsChange(groups.filter((x) => x.id !== g.id))}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setWizardProjectId(assocPending);
+                setAssocPending(null);
+              }}
+            >
+              <Layers className="mr-1 h-4 w-4" />
+              Repartir à zéro pour cette rencontre
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

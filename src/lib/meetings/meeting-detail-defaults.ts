@@ -88,7 +88,27 @@ export function demoSnapshotForMeeting(meeting: Meeting): MeetingDetailSnapshot 
 }
 
 export function resolveMeetingSnapshot(meeting: Meeting): MeetingDetailSnapshot {
-  if (meeting.snapshot) return meeting.snapshot;
+  if (meeting.snapshot && Object.keys(meeting.snapshot).length > 0) return meeting.snapshot;
+  if (meeting.agendaPlan?.length || meeting.wizardMeta?.subgroups?.length) {
+    return {
+      objective: meeting.sub,
+      participants: [],
+      agenda: (meeting.agendaPlan ?? []).map((b, i) => ({
+        title: b.title,
+        planned: b.min || 10,
+        real: 0,
+        color: ["slate", "blue", "violet", "amber", "green"][i % 5],
+      })),
+      breakoutGroups: meeting.wizardMeta?.subgroups?.map((g) => ({
+        id: g.id,
+        name: g.name,
+        color: g.color,
+        memberIds: g.memberIds,
+        facilitatorId: meeting.wizardMeta?.groupAssign?.[g.id]?.facilitatorId,
+        methodId: meeting.wizardMeta?.groupAssign?.[g.id]?.methodId,
+      })),
+    };
+  }
   if (meeting.status === "Terminée") return demoSnapshotForMeeting(meeting);
   return {};
 }

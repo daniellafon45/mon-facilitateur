@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DbMeeting, DbProject, DbTask, DbContact, DbTeam, DbActivity, WizardPayload } from "@/types/facilitation";
+import type { DbMeeting, DbProject, DbTask, DbContact, DbTeam, DbActivity, WizardPayload, MeetingDetailSnapshot, MeetingAgendaBlock, MeetingWizardMeta } from "@/types/facilitation";
 import { countProjectMembers } from "@/lib/supabase/queries/project-extras";
 
 export function mapProject(row: DbProject, members = 0) {
@@ -30,6 +30,7 @@ export function mapMeeting(row: DbMeeting) {
     name: row.name,
     dateISO: row.meeting_date,
     time: row.meeting_time.slice(0, 5),
+    meetingEnd: row.meeting_end?.slice(0, 5) ?? undefined,
     type: row.meeting_type,
     status: statusMap[row.status] ?? row.status,
     participants: row.participants_count,
@@ -37,6 +38,12 @@ export function mapMeeting(row: DbMeeting) {
     project: row.project_id ?? undefined,
     sub: row.subtitle ?? undefined,
     archived: row.archived,
+    star: row.starred ?? false,
+    agendaPlan: (row.agenda as MeetingAgendaBlock[] | null | undefined) ?? undefined,
+    meetingPlatform: row.meeting_platform ?? undefined,
+    meetingLink: row.meeting_link ?? undefined,
+    wizardMeta: (row.wizard_meta as MeetingWizardMeta | null | undefined) ?? undefined,
+    snapshot: (row.snapshot as MeetingDetailSnapshot | null | undefined) ?? undefined,
   };
 }
 
@@ -63,6 +70,9 @@ export async function fetchWorkspace(supabase: SupabaseClient, userId: string) {
       title: t.title,
       done: t.done,
       projectId: t.project_id ?? undefined,
+      who: t.board_meta?.assigneeName ?? "Vous",
+      due: t.due_date ?? undefined,
+      prio: t.priority ?? "Moyenne",
     })),
     contacts: (contactsRes.data ?? []).map((c: DbContact) => ({
       id: c.id,
@@ -148,6 +158,13 @@ export async function patchMeeting(
     status?: string;
     participants_count?: number;
     subtitle?: string | null;
+    snapshot?: MeetingDetailSnapshot | null;
+    agenda?: MeetingAgendaBlock[] | null;
+    meeting_end?: string | null;
+    meeting_platform?: string | null;
+    meeting_link?: string | null;
+    wizard_meta?: MeetingWizardMeta | null;
+    starred?: boolean;
   },
 ) {
   const payload: Record<string, unknown> = {};
@@ -159,6 +176,13 @@ export async function patchMeeting(
   if (data.methods !== undefined) payload.methods = data.methods;
   if (data.participants_count !== undefined) payload.participants_count = data.participants_count;
   if (data.subtitle !== undefined) payload.subtitle = data.subtitle;
+  if (data.snapshot !== undefined) payload.snapshot = data.snapshot;
+  if (data.agenda !== undefined) payload.agenda = data.agenda;
+  if (data.meeting_end !== undefined) payload.meeting_end = data.meeting_end;
+  if (data.meeting_platform !== undefined) payload.meeting_platform = data.meeting_platform;
+  if (data.meeting_link !== undefined) payload.meeting_link = data.meeting_link;
+  if (data.wizard_meta !== undefined) payload.wizard_meta = data.wizard_meta;
+  if (data.starred !== undefined) payload.starred = data.starred;
   if (data.status !== undefined) {
     payload.status =
       data.status === "Terminée"
@@ -192,6 +216,14 @@ export async function upsertMeeting(
     methods?: string[];
     status?: string;
     participants_count?: number;
+    subtitle?: string | null;
+    snapshot?: MeetingDetailSnapshot | null;
+    agenda?: MeetingAgendaBlock[] | null;
+    meeting_end?: string | null;
+    meeting_platform?: string | null;
+    meeting_link?: string | null;
+    wizard_meta?: MeetingWizardMeta | null;
+    starred?: boolean;
   },
 ) {
   const statusDb = data.status === "Terminée" ? "completed" : data.status === "En cours" ? "in_progress" : "scheduled";
@@ -203,10 +235,17 @@ export async function upsertMeeting(
       project_id: data.project_id ?? null,
       meeting_date: data.meeting_date,
       meeting_time: data.meeting_time ?? "10:00",
+      meeting_end: data.meeting_end ?? null,
       meeting_type: data.meeting_type ?? "Réunion",
       methods: data.methods ?? [],
       status: statusDb,
       participants_count: data.participants_count ?? 2,
+      snapshot: data.snapshot ?? null,
+      agenda: data.agenda ?? null,
+      meeting_platform: data.meeting_platform ?? null,
+      meeting_link: data.meeting_link ?? null,
+      wizard_meta: data.wizard_meta ?? null,
+      starred: data.starred ?? false,
     })
     .select()
     .single();
@@ -254,4 +293,47 @@ export async function logActivity(
     icon: event.icon ?? "Sparkles",
     color: event.color ?? "primary",
   });
+}
+
+export async function insertTask(
+  supabase: SupabaseClient,
+  userId: string,
+  data: {
+    title: string;
+    project_id?: string;
+    due_date?: string;
+    priority?: string;
+    done?: boolean;
+    meeting_id?: string;
+    assignee_name?: string;
+  },
+) {
+  const { data: row, error } = await supabase
+    .from("tasks")
+    .insert({
+      owner_id: userId,
+      title: data.title,
+      project_id: data.project_id ?? null,
+      due_date: data.due_date || null,
+      priority: data.priority ?? "Moyenne",
+      done: data.done ?? false,
+      board_meta: {
+        assigneeName: data.assignee_name ?? "Vous",
+        source: "compte rendu",
+        meetingId: data.meeting_id,
+      },
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  const t = row as DbTask;
+  return {
+    id: t.id,
+    title: t.title,
+    done: t.done,
+    projectId: t.project_id ?? undefined,
+    who: t.board_meta?.assigneeName ?? "Vous",
+    due: t.due_date ?? undefined,
+    prio: t.priority ?? "Moyenne",
+  };
 }

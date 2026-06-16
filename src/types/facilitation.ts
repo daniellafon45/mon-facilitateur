@@ -45,6 +45,8 @@ export interface ActiveSessionPayload {
   soloMusic?: WizardSoloMusic;
   soloTools?: string[];
   durationMin?: number;
+  confirmedGroups?: WizardConfirmedGroup[] | null;
+  groupAssign?: Record<string, WizardGroupAssign>;
   launchedAt: string;
 }
 
@@ -55,6 +57,7 @@ export interface ChatRecommendation {
   reply: string;
   objective?: string;
   mode?: SessionMode;
+  ptype?: "academique" | "creation" | "entrepreneurial" | "pro";
   methodIds?: string[];
   genreId?: string;
   followUpQuestions?: string[];
@@ -67,9 +70,21 @@ export interface WizardMember {
   id: string;
   name: string;
   email?: string;
+  contactId?: string;
+  /** Rôle en rencontre (Facilitatrice, Scribe, etc.) */
   role?: string;
+  meetingRole?: string;
   projectAccess?: string;
+  accessRole?: string;
   color?: string;
+}
+
+export interface MeetingWizardMeta {
+  subgroups?: WizardConfirmedGroup[];
+  groupAssign?: Record<string, WizardGroupAssign>;
+  launchMode?: WizardLaunchMode;
+  inviteMode?: "together" | "separate";
+  essentialRoles?: Record<string, string>;
 }
 
 export interface WizardGroupAssign {
@@ -81,7 +96,17 @@ export interface WizardGroupAssign {
 export interface WizardConfirmedGroup {
   id: string;
   name: string;
+  color?: string;
   memberIds: string[];
+}
+
+export interface MeetingBreakoutGroupSnapshot {
+  id: string;
+  name: string;
+  color?: string;
+  memberIds: string[];
+  facilitatorId?: string;
+  methodId?: string;
 }
 
 
@@ -105,6 +130,7 @@ export interface WizardPayload {
   members?: WizardMember[];
   confirmedGroups?: WizardConfirmedGroup[] | null;
   groupAssign?: Record<string, WizardGroupAssign>;
+  roleAssign?: Record<string, string>;
   meetingTitle?: string;
   meetingDate?: string;
   meetingStart?: string;
@@ -112,6 +138,9 @@ export interface WizardPayload {
   launchMode?: WizardLaunchMode;
   meetingPlatform?: string;
   meetingLink?: string;
+  essentialRoles?: Record<string, string>;
+  registryDraft?: import("@/lib/project/registry-types").ProjectRegistryPayload | null;
+  inviteMode?: "together" | "separate";
   whiteboardElements?: import("@/lib/whiteboard/elements").WbElement[];
   whiteboardView?: { tx: number; ty: number; k: number };
 }
@@ -141,12 +170,19 @@ export interface DbMeeting {
   name: string;
   meeting_date: string;
   meeting_time: string;
+  meeting_end?: string | null;
   meeting_type: string;
   status: string;
   participants_count: number;
   methods: string[];
   subtitle: string | null;
   archived: boolean;
+  starred?: boolean;
+  agenda?: MeetingAgendaBlock[] | null;
+  meeting_platform?: string | null;
+  meeting_link?: string | null;
+  wizard_meta?: MeetingWizardMeta | null;
+  snapshot?: MeetingDetailSnapshot | null;
 }
 
 export interface DbTask {
@@ -155,6 +191,9 @@ export interface DbTask {
   owner_id: string;
   title: string;
   done: boolean;
+  due_date?: string | null;
+  priority?: string | null;
+  board_meta?: { assigneeName?: string; source?: string; meetingId?: string } | null;
 }
 
 export interface DbContact {
@@ -397,10 +436,23 @@ export interface MeetingReport {
   decisions: string[];
 }
 
+export interface ReportHighlight {
+  id: string;
+  text: string;
+}
+
+export interface ReportNextMeeting {
+  date: string;
+  start: string;
+  end?: string;
+  scheduled?: boolean;
+}
+
 export interface MeetingDetailSnapshot {
   ref?: string;
   duration?: string;
   facilitator?: string;
+  objective?: string;
   participants?: MeetingParticipantDetail[];
   journal?: MeetingJournalEntry[];
   methods?: MeetingMethodResult[];
@@ -409,10 +461,13 @@ export interface MeetingDetailSnapshot {
   votes?: MeetingVoteEntry[];
   quickLog?: MeetingQuickLogEntry[];
   tasks?: MeetingTaskEntry[];
+  highlights?: ReportHighlight[];
+  nextMeeting?: ReportNextMeeting;
   whiteboard?: MeetingWhiteboardEntry[];
   agenda?: MeetingAgendaTiming[];
   documents?: MeetingDocumentEntry[];
   report?: MeetingReport;
+  breakoutGroups?: MeetingBreakoutGroupSnapshot[];
 }
 
 export interface Meeting {
@@ -420,6 +475,7 @@ export interface Meeting {
   name: string;
   dateISO: string;
   time: string;
+  meetingEnd?: string;
   type: string;
   status: string;
   participants: number;
@@ -429,6 +485,9 @@ export interface Meeting {
   archived?: boolean;
   star?: boolean;
   agendaPlan?: MeetingAgendaBlock[];
+  meetingPlatform?: string;
+  meetingLink?: string;
+  wizardMeta?: MeetingWizardMeta;
   snapshot?: MeetingDetailSnapshot;
 }
 

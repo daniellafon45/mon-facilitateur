@@ -17,6 +17,7 @@ import {
   patchMeeting,
   archiveMeeting,
   logActivity,
+  insertTask,
 } from "@/lib/supabase/queries/workspace";
 
 const isUuid = (id: string) =>
@@ -124,7 +125,7 @@ interface FacilitationStore {
     simulating?: boolean;
     participants?: number;
   }) => Promise<Meeting | null>;
-  addTasksFromReport: (tasks: MeetingTaskEntry[], projectId?: string) => number;
+  addTasksFromReport: (tasks: MeetingTaskEntry[], projectId?: string, meetingId?: string) => Promise<number>;
   updateMeetingSnapshot: (id: string, snapshot: Meeting["snapshot"]) => Promise<void>;
   setWizardSeed: (objective: string, mode?: SessionMode | null, methodIds?: string[]) => void;
   launchSession: (payload: Omit<ActiveSessionPayload, "launchedAt">) => void;
@@ -168,6 +169,7 @@ export const useFacilitationStore = create<FacilitationStore>()(
           name: m.name ?? "Nouvelle rencontre",
           dateISO: m.dateISO ?? todayISO(),
           time: m.time ?? "10:00",
+          meetingEnd: m.meetingEnd,
           type: m.type ?? "Réunion",
           status: m.status ?? "À venir",
           participants: m.participants ?? 2,
@@ -177,6 +179,9 @@ export const useFacilitationStore = create<FacilitationStore>()(
           archived: m.archived,
           star: m.star,
           agendaPlan: m.agendaPlan,
+          meetingPlatform: m.meetingPlatform,
+          meetingLink: m.meetingLink,
+          wizardMeta: m.wizardMeta,
           snapshot: m.snapshot,
         };
         if (user) {
@@ -186,10 +191,17 @@ export const useFacilitationStore = create<FacilitationStore>()(
               project_id: local.project,
               meeting_date: local.dateISO,
               meeting_time: local.time,
+              meeting_end: local.meetingEnd ?? null,
               meeting_type: local.type,
               methods: local.methods,
               status: local.status,
               participants_count: local.participants,
+              agenda: local.agendaPlan ?? null,
+              meeting_platform: local.meetingPlatform ?? null,
+              meeting_link: local.meetingLink ?? null,
+              wizard_meta: local.wizardMeta ?? null,
+              starred: local.star ?? false,
+              ...(local.snapshot !== undefined ? { snapshot: local.snapshot } : {}),
             });
             set((s) => ({ meetings: [saved, ...s.meetings] }));
             return saved;
@@ -210,12 +222,19 @@ export const useFacilitationStore = create<FacilitationStore>()(
               name: data.name,
               meeting_date: data.dateISO,
               meeting_time: data.time,
+              meeting_end: data.meetingEnd ?? null,
               meeting_type: data.type,
               methods: data.methods,
               status: data.status,
               participants_count: data.participants,
               subtitle: data.sub ?? null,
               project_id: data.project ?? null,
+              agenda: data.agendaPlan ?? null,
+              meeting_platform: data.meetingPlatform ?? null,
+              meeting_link: data.meetingLink ?? null,
+              wizard_meta: data.wizardMeta ?? null,
+              starred: data.star,
+              ...(data.snapshot !== undefined ? { snapshot: data.snapshot } : {}),
             });
             set((s) => ({
               meetings: s.meetings.map((m) => (m.id === id ? saved : m)),
@@ -245,12 +264,25 @@ export const useFacilitationStore = create<FacilitationStore>()(
         set((s) => ({ meetings: s.meetings.filter((m) => m.id !== id) }));
       },
 
-      toggleMeetingStar: (id) =>
+      toggleMeetingStar: async (id) => {
+        const meeting = get().meetings.find((m) => m.id === id);
+        if (!meeting) return;
+        const next = !meeting.star;
         set((s) => ({
           meetings: s.meetings.map((m) =>
-            m.id === id ? { ...m, star: !m.star } : m,
+            m.id === id ? { ...m, star: next } : m,
           ),
-        })),
+        }));
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && isUuid(id)) {
+          try {
+            await patchMeeting(supabase, id, { starred: next });
+          } catch {
+            /* offline */
+          }
+        }
+      },
 
       duplicateMeeting: async (id) => {
         const src = get().meetings.find((m) => m.id === id);
@@ -592,14 +624,17 @@ export const useFacilitationStore = create<FacilitationStore>()(
         return meeting;
       },
 
-      addTasksFromReport: (tasks, projectId) => {
+      addTasksFromReport: async (tasks, projectId, meetingId) => {
         const project = projectId ? get().projects.find((p) => p.id === projectId) : undefined;
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
         const added: TaskItem[] = [];
-        tasks.forEach((t) => {
-          if (!t.title?.trim()) return;
-          added.push({
+
+        for (const t of tasks) {
+          if (!t.title?.trim()) continue;
+          const local: TaskItem = {
             id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-            title: t.title,
+            title: t.title.trim(),
             done: t.done ?? false,
             projectId,
             proj: project?.name ?? "Compte rendu de séance",
@@ -607,8 +642,28 @@ export const useFacilitationStore = create<FacilitationStore>()(
             wc: t.wc ?? "#2563eb",
             due: t.due,
             prio: t.prio ?? "Moyenne",
-          });
-        });
+          };
+
+          if (user) {
+            try {
+              const saved = await insertTask(supabase, user.id, {
+                title: local.title,
+                project_id: projectId,
+                due_date: t.due && t.due !== "—" ? t.due : undefined,
+                priority: t.prio ?? "Moyenne",
+                done: t.done ?? false,
+                meeting_id: meetingId,
+                assignee_name: t.who ?? "Vous",
+              });
+              added.push({ ...local, id: saved.id, due: saved.due });
+              continue;
+            } catch {
+              /* fallback local */
+            }
+          }
+          added.push(local);
+        }
+
         if (!added.length) return 0;
         set((s) => ({ tasks: [...added, ...s.tasks] }));
         return added.length;
